@@ -23,7 +23,7 @@ ifeq ($(TARGET_ARCH_ABI),x86)
 LOCAL_CFLAGS += $(CFLAGS_OPT_X86)
 endif
 
-LOCAL_CFLAGS += -D__MULTITEXTURE_SUPPORT__ -DXASH_GLES -DUSE_EVDEV -fsigned-char
+LOCAL_CFLAGS += -DXASH_GLES -DUSE_EVDEV -fsigned-char
 
 ifeq ($(XASH_SDL),1)
 LOCAL_CFLAGS += -DXASH_SDL
@@ -89,7 +89,8 @@ LOCAL_SRC_FILES := \
            client/gl_rsurf.c \
            client/gl_sprite.c \
            client/gl_studio.c \
-           client/gl_vidnt.c \
+           client/gl_vidsdl.c \
+	   client/gl_viddummy.c \
            client/gl_warp.c \
            client/s_backend.c \
            client/s_dsp.c \
@@ -173,7 +174,6 @@ LOCAL_SHARED_LIBRARIES := touchcontrols
 ifeq ($(XASH_SDL),1)
 LOCAL_SHARED_LIBRARIES += SDL2
 endif
-LOCAL_STATIC_LIBRARIES := NanoGL
 
 LOCAL_LDLIBS := -ldl -llog
 
