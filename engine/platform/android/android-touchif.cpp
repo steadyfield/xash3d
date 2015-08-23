@@ -22,14 +22,15 @@
 #include <android/log.h>
 #include <unistd.h>
 
+#include "android-gameif.h"
+extern "C"
+{
+#include "common.h"
+#include "gl_export.h"
+}
 
 #include "TouchControlsContainer.h"
 #include "JNITouchControlsUtils.h"
-
-
-
-#include "android-gameif.h"
-#include "nanogl.h"
 
 extern "C"
 {
@@ -88,61 +89,58 @@ extern JNIEnv* env_;
 GLint     matrixMode;
 GLfloat   projection[16];
 GLfloat   model[16];
-void glOrtho (GLfloat left, GLfloat right, GLfloat bottom, GLfloat top, GLfloat zNear, GLfloat zFar);
 
 void openGLStart()
 {
-
-	glGetIntegerv(GL_MATRIX_MODE, &matrixMode);
-	glGetFloatv(GL_PROJECTION_MATRIX, projection);
-	glGetFloatv(GL_MODELVIEW_MATRIX, model);
+	pglGetIntegerv(GL_MATRIX_MODE, &matrixMode);
+	pglGetFloatv(GL_PROJECTION_MATRIX, projection);
+	pglGetFloatv(GL_MODELVIEW_MATRIX, model);
 
 	//glClearColor(1.0f, 1.0f, 0.0f, 1.0f);
 	//glClear(GL_COLOR_BUFFER_BIT);
 	//LOGI("openGLStart");
-	glMatrixMode(GL_PROJECTION);
+	pglMatrixMode(GL_PROJECTION);
 
-	glLoadIdentity();
+	pglLoadIdentity();
 
-	glViewport(0, 0, android_screen_width, android_screen_height);
-	glOrtho(0.0f, (float)android_screen_width,  (float)android_screen_height, 0.0f, -1.0f, 1.0f);
+	pglViewport(0, 0, android_screen_width, android_screen_height);
+	pglOrtho(0.0f, (float)android_screen_width,  (float)android_screen_height, 0.0f, -1.0f, 1.0f);
 
-	glMatrixMode(GL_MODELVIEW);
+	pglMatrixMode(GL_MODELVIEW);
 
-	glLoadIdentity();
+	pglLoadIdentity();
 
-	glDisable(GL_ALPHA_TEST);
-	glDisableClientState(GL_COLOR_ARRAY);
-	glEnableClientState(GL_VERTEX_ARRAY);
-	glEnableClientState(GL_TEXTURE_COORD_ARRAY );
+	pglDisable(GL_ALPHA_TEST);
+	pglDisableClientState(GL_COLOR_ARRAY);
+	pglEnableClientState(GL_VERTEX_ARRAY);
+	pglEnableClientState(GL_TEXTURE_COORD_ARRAY );
 
-	glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
-	glEnable (GL_BLEND);
-	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-	glEnable(GL_TEXTURE_2D);
-	glDisable(GL_CULL_FACE);
-	glMatrixMode(GL_MODELVIEW);
-
+	pglTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+	pglEnable (GL_BLEND);
+	pglBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	pglEnable(GL_TEXTURE_2D);
+	pglDisable(GL_CULL_FACE);
+	pglMatrixMode(GL_MODELVIEW);
 }
 
 void openGLEnd()
 {
-	nanoGL_Reset();
+	pnanoGL_Reset();
 
-	glMatrixMode(GL_MODELVIEW);
-	glLoadMatrixf(model);
+	pglMatrixMode(GL_MODELVIEW);
+	pglLoadMatrixf(model);
 
-	glMatrixMode(GL_PROJECTION);
-	glLoadMatrixf(projection);
+	pglMatrixMode(GL_PROJECTION);
+	pglLoadMatrixf(projection);
 
 
 	if (matrixMode == GL_MODELVIEW)
 	{
-		glMatrixMode(GL_MODELVIEW);
+		pglMatrixMode(GL_MODELVIEW);
 	}
 	else if (matrixMode == GL_TEXTURE)
 	{
-		glMatrixMode(GL_TEXTURE);
+		pglMatrixMode(GL_TEXTURE);
 	}
 }
 
@@ -426,8 +424,6 @@ void initControls(int width, int height,const char * graphics_path,const char *s
 		LOGI("NOT creating controls");
 }
 
-//extern void flush(); //in glshim/arc/gl/gl.c
-
 int inMenuLast = 1;
 int inAutomapLast = 0;
 static int glInit = 0;
@@ -471,10 +467,11 @@ extern "C" void Android_DrawControls()
 	setHideSticks(!showSticks);
 
 	//flush(); //draw out game from glshim
-	nanoGL_Flush();
+	pnanoGL_Flush();
 	
 	controlsContainer.draw();
 	
+	pnanoGL_Flush();
 	//flush(); //draw out controls from glshim
 	// glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 	// glClear(GL_COLOR_BUFFER_BIT);

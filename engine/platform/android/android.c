@@ -12,7 +12,6 @@ nicknekit
 
 
 
-
 #ifdef XASH_SDL
 /* Include the SDL main definition header */
 #include "SDL_main.h"
@@ -100,7 +99,7 @@ int Java_org_libsdl_app_SDLActivity_setenv
 }
 #else
 
-#include "nanogl.h" //use NanoGL
+#include "gl_export.h"
 
 jclass gClass;
 JNIEnv *gEnv;
@@ -149,7 +148,7 @@ int Java_in_celest_xash3d_XashActivity_nativeInit(JNIEnv* env, jclass cls, jobje
     gClass = (*env)->FindClass(env, "in/celest/xash3d/XashActivity");
     gSwapBuffers = (*env)->GetStaticMethodID(env, gClass, "swapBuffers", "()V");
 
-    nanoGL_Init();
+	pnanoGL_Init();
     /* Run the application. */
 
     status = Host_Main(argc, argv, GAME_PATH, false, NULL);
@@ -182,7 +181,7 @@ void Java_in_celest_xash3d_XashActivity_nativeTouch(JNIEnv* env, jclass cls, jin
 
 void Android_SwapBuffers()
 {
-	nanoGL_Flush();
+	pnanoGL_Flush();
 	(*gEnv)->CallStaticVoidMethod(gEnv, gClass, gSwapBuffers);
 }
 void Android_GetScreenRes(int *width, int *height)
