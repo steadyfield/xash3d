@@ -495,10 +495,6 @@ void R_NewMap( void );
 
 =======================================================================
 */
-#ifdef __ANDROID__
-#undef GL_TEXTURE_3D_EXT
-#undef GL_VERTEX_SHADER_EXT
-#endif
 enum
 {
 	GL_OPENGL_110 = 0,		// base
@@ -540,7 +536,6 @@ enum
 	GL_EXTCOUNT,		// must be last
 };
 
-#ifndef __ANDROID__
 enum
 {
 	GL_KEEP_UNIT = -1,
@@ -550,10 +545,6 @@ enum
 	GL_TEXTURE3,		// g-cont. 4 units should be enough
 	MAX_TEXTURE_UNITS = 32	// can't acess to all over units without GLSL or cg
 };
-#else
-#define GL_KEEP_UNIT -1
-#define MAX_TEXTURE_UNITS 32
-#endif
 
 typedef struct
 {
