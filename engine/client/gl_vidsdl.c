@@ -13,22 +13,18 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 */
 
+#ifdef XASH_SDL
+
 #include "common.h"
 #include "client.h"
 #include "gl_local.h"
 #include "mod_local.h"
 #include "input.h"
 
-#if defined(__ANDROID__)
 // TODO: Find a way how to change icon in runtime on Android
-#elif (defined(_WIN32) && defined(XASH_SDL))
+#if !defined(__ANDROID__)
 #include <SDL_syswm.h>
-#elif defined(XASH_SDL)
 #include <SDL_image.h> // Android: disable useless SDL_image
-#endif
-
-#ifdef __ANDROID__
-#include <GL/nanogl.h>
 #endif
 
 #ifdef XASH_X11
@@ -37,13 +33,8 @@ GNU General Public License for more details.
 #endif
 
 
-#ifdef PANDORA
-#define VID_AUTOMODE	"10"
-#define VID_DEFAULTMODE         2.0f
-#else
 #define VID_AUTOMODE	"-1"
 #define VID_DEFAULTMODE	2.0f
-#endif
 #define DISP_CHANGE_BADDUALVIEW	-6 // MSVC 6.0 doesn't
 #define num_vidmodes	( sizeof( vidmode ) / sizeof( vidmode[0] ))
 #define WINDOW_NAME			"Xash Window" // Half-Life
@@ -116,7 +107,7 @@ glconfig_t	glConfig;
 glstate_t		glState;
 glwstate_t	glw_state;
 uint		num_instances;
-
+void		*nanoGLHandle;
 
 typedef enum
 {
@@ -163,306 +154,16 @@ vidmode_t vidmode[] =
 };
 
 #ifdef __ANDROID__
-
-static char* opengl_110funcs[] =
+static dllfunc_t nanogl_funcs[] =
 {
- "glClearColor"         ,
- "glClear"              ,
- "glAlphaFunc"          ,
- "glBlendFunc"          ,
- "glCullFace"           ,
- "glDrawBuffer"         ,
- "glReadBuffer"         ,
- "glEnable"             ,
- "glDisable"            ,
- "glEnableClientState"  ,
- "glDisableClientState" ,
- "glGetBooleanv"        ,
- "glGetDoublev"         ,
- "glGetFloatv"          ,
- "glGetIntegerv"        ,
- "glGetError"           ,
- "glGetString"          ,
- "glFinish"             ,
- "glFlush"              ,
- "glClearDepth"         ,
- "glDepthFunc"          ,
- "glDepthMask"          ,
- "glDepthRange"         ,
- "glFrontFace"          ,
- "glDrawElements"       ,
- "glColorMask"          ,
- "glIndexPointer"       ,
- "glVertexPointer"      ,
- "glNormalPointer"      ,
- "glColorPointer"       ,
- "glTexCoordPointer"    ,
- "glArrayElement"       ,
- "glColor3f"            ,
- "glColor3fv"           ,
- "glColor4f"            ,
- "glColor4fv"           ,
- "glColor3ub"           ,
- "glColor4ub"           ,
- "glColor4ubv"          ,
- "glTexCoord1f"         ,
- "glTexCoord2f"         ,
- "glTexCoord3f"         ,
- "glTexCoord4f"         ,
- "glTexGenf"            ,
- "glTexGenfv"           ,
- "glTexGeni"            ,
- "glVertex2f"           ,
- "glVertex3f"           ,
- "glVertex3fv"          ,
- "glNormal3f"           ,
- "glNormal3fv"          ,
- "glBegin"              ,
- "glEnd"                ,
- "glLineWidth"          ,
- "glPointSize"          ,
- "glMatrixMode"         ,
- "glOrtho"              ,
- "glRasterPos2f"        ,
- "glFrustum"            ,
- "glViewport"           ,
- "glPushMatrix"         ,
- "glPopMatrix"          ,
- "glPushAttrib"         ,
- "glPopAttrib"          ,
- "glLoadIdentity"       ,
- "glLoadMatrixd"        ,
- "glLoadMatrixf"        ,
- "glMultMatrixd"        ,
- "glMultMatrixf"        ,
- "glRotated"            ,
- "glRotatef"            ,
- "glScaled"             ,
- "glScalef"             ,
- "glTranslated"         ,
- "glTranslatef"         ,
- "glReadPixels"         ,
- "glDrawPixels"         ,
- "glStencilFunc"        ,
- "glStencilMask"        ,
- "glStencilOp"          ,
- "glClearStencil"       ,
- "glIsEnabled"          ,
- "glIsList"             ,
- "glIsTexture"          ,
- "glTexEnvf"            ,
- "glTexEnvfv"           ,
- "glTexEnvi"            ,
- "glTexParameterf"      ,
- "glTexParameterfv"     ,
- "glTexParameteri"      ,
- "glHint"               ,
- "glPixelStoref"        ,
- "glPixelStorei"        ,
- "glGenTextures"        ,
- "glDeleteTextures"     ,
- "glBindTexture"        ,
- "glTexImage1D"         ,
- "glTexImage2D"         ,
- "glTexSubImage1D"      ,
- "glTexSubImage2D"      ,
- "glCopyTexImage1D"     ,
- "glCopyTexImage2D"     ,
- "glCopyTexSubImage1D"  ,
- "glCopyTexSubImage2D"  ,
- "glScissor"            ,
- "glGetTexEnviv"        ,
- "glPolygonOffset"      ,
- "glPolygonMode"        ,
- "glPolygonStipple"     ,
- "glClipPlane"          ,
- "glGetClipPlane"       ,
- "glShadeModel"         ,
- "glFogfv"              ,
- "glFogf"               ,
- "glFogi"               ,
- NULL
+{ "nanoGL_Init"			 , (void **)&pnanoGL_Init },
+{ "nanoGL_Destroy"		 , (void **)&pnanoGL_Destroy },
+{ "nanoGL_Flush"		 , (void **)&pnanoGL_Flush },
+{ "nanoGL_GetProcAddress", (void **)&pnanoGL_GetProcAddress },
+{ "nanoGL_Reset"		 , (void **)&pnanoGL_Reset },
+{ NULL, NULL },
 };
-
-static char* pointparametersfunc[] =
-{
-"glPointParameterfEXT"  ,
-"glPointParameterfvEXT" ,
-NULL
-};
-
-static char* drawrangeelementsfuncs[] =
-{
- "glDrawRangeElements" ,
- NULL
-};
-
-static char* drawrangeelementsextfuncs[] =
-{
- "glDrawRangeElementsEXT" ,
- NULL
-};
-
-static char* sgis_multitexturefuncs[] =
-{
- "glSelectTextureSGIS" ,
- "glMTexCoord2fSGIS"   ,
- NULL
-};
-
-static char* multitexturefuncs[] =
-{
- "glMultiTexCoord1fARB"     ,
- "glMultiTexCoord2fARB"     ,
- "glMultiTexCoord3fARB"     ,
- "glMultiTexCoord4fARB"     ,
- "glActiveTextureARB"       ,
- "glClientActiveTextureARB" ,
- "glClientActiveTextureARB" ,
- NULL
-};
-
-static char* compiledvertexarrayfuncs[] =
-{
- "glLockArraysEXT"   ,
- "glUnlockArraysEXT" ,
- "glDrawArrays"      ,
- NULL
-};
-
-static char* texture3dextfuncs[] =
-{
- "glTexImage3DEXT"        ,
- "glTexSubImage3DEXT"     ,
- "glCopyTexSubImage3DEXT" ,
- NULL
-};
-
-static char* atiseparatestencilfuncs[] =
-{
- "glStencilOpSeparateATI"   ,
- "glStencilFuncSeparateATI" ,
- NULL
-};
-
-static char* gl2separatestencilfuncs[] =
-{
- "glStencilOpSeparate"   ,
- "glStencilFuncSeparate" ,
- NULL
-};
-
-static char* stenciltwosidefuncs[] =
-{
- "glActiveStencilFaceEXT" ,
- NULL
-};
-
-static char* blendequationfuncs[] =
-{
- "glBlendEquationEXT" ,
- NULL
-};
-
-static char* shaderobjectsfuncs[] =
-{
- "glDeleteObjectARB"             ,
- "glGetHandleARB"                ,
- "glDetachObjectARB"             ,
- "glCreateShaderObjectARB"       ,
- "glShaderSourceARB"             ,
- "glCompileShaderARB"            ,
- "glCreateProgramObjectARB"      ,
- "glAttachObjectARB"             ,
- "glLinkProgramARB"              ,
- "glUseProgramObjectARB"         ,
- "glValidateProgramARB"          ,
- "glUniform1fARB"                ,
- "glUniform2fARB"                ,
- "glUniform3fARB"                ,
- "glUniform4fARB"                ,
- "glUniform1iARB"                ,
- "glUniform2iARB"                ,
- "glUniform3iARB"                ,
- "glUniform4iARB"                ,
- "glUniform1fvARB"               ,
- "glUniform2fvARB"               ,
- "glUniform3fvARB"               ,
- "glUniform4fvARB"               ,
- "glUniform1ivARB"               ,
- "glUniform2ivARB"               ,
- "glUniform3ivARB"               ,
- "glUniform4ivARB"               ,
- "glUniformMatrix2fvARB"         ,
- "glUniformMatrix3fvARB"         ,
- "glUniformMatrix4fvARB"         ,
- "glGetObjectParameterfvARB"     ,
- "glGetObjectParameterivARB"     ,
- "glGetInfoLogARB"               ,
- "glGetAttachedObjectsARB"       ,
- "glGetUniformLocationARB"       ,
- "glGetActiveUniformARB"         ,
- "glGetUniformfvARB"             ,
- "glGetUniformivARB"             ,
- "glGetShaderSourceARB"          ,
- "glVertexAttribPointerARB"      ,
- "glEnableVertexAttribArrayARB"  ,
- "glDisableVertexAttribArrayARB" ,
- "glBindAttribLocationARB"       ,
- "glGetActiveAttribARB"          ,
- "glGetAttribLocationARB"        ,
- NULL
-};
-
-static char* vertexshaderfuncs[] =
-{
- "glVertexAttribPointerARB"      ,
- "glEnableVertexAttribArrayARB"  ,
- "glDisableVertexAttribArrayARB" ,
- "glBindAttribLocationARB"       ,
- "glGetActiveAttribARB"          ,
- "glGetAttribLocationARB"        ,
- NULL
-};
-
-static char* vbofuncs[] =
-{
- "glBindBufferARB"    ,
- "glDeleteBuffersARB" ,
- "glGenBuffersARB"    ,
- "glIsBufferARB"      ,
- "glMapBufferARB"     ,
- "glUnmapBufferARB"   ,
- "glBufferDataARB"    ,
- "glBufferSubDataARB" ,
- NULL
-};
-
-static char* occlusionfunc[] =
-{
- "glGenQueriesARB"        ,
- "glDeleteQueriesARB"     ,
- "glIsQueryARB"           ,
- "glBeginQueryARB"        ,
- "glEndQueryARB"          ,
- "glGetQueryivARB"        ,
- "glGetQueryObjectivARB"  ,
- "glGetQueryObjectuivARB" ,
- NULL
-};
-
-static char* texturecompressionfuncs[] =
-{
- "glCompressedTexImage3DARB"    ,
- "glCompressedTexImage2DARB"    ,
- "glCompressedTexImage1DARB"    ,
- "glCompressedTexSubImage3DARB" ,
- "glCompressedTexSubImage2DARB" ,
- "glCompressedTexSubImage1DARB" ,
- "glGetCompressedTexImageARB"   ,
- NULL
-};
-#else
+#endif
 
 static dllfunc_t opengl_110funcs[] =
 {
@@ -630,7 +331,7 @@ static dllfunc_t compiledvertexarrayfuncs[] =
 { NULL, NULL }
 };
 
-static dllfunc_t texture3dextfuncs[] =
+static dllfunc_t texture3dextfuncs[] = // Available in NanoGL
 {
 { "glTexImage3DEXT"        , (void **)&pglTexImage3D },
 { "glTexSubImage3DEXT"     , (void **)&pglTexSubImage3D },
@@ -762,7 +463,6 @@ static dllfunc_t texturecompressionfuncs[] =
 { "glGetCompressedTexImageARB"   , (void **)&pglGetCompressedTexImage },
 { NULL, NULL }
 };
-#endif
 
 /*
 =================
@@ -809,16 +509,21 @@ GL_GetProcAddress
 */
 void *GL_GetProcAddress( const char *name )
 {
-#ifdef XASH_SDL
-	void *func = SDL_GL_GetProcAddress(name);
-#elif defined (XASH_GLES)
-	void *func = nanoGL_GetProcAddress(name);
-#else //No opengl implementation
 	void *func = NULL;
-#endif
-	if(!func)
+
+	// don't make engine mix GL and GLES functions
+#ifdef __ANDROID__
+	func = dlsym( nanoGLHandle, name );
+#else
+	if( !func )
 	{
-		MsgDev(D_ERROR, "Error: GL_GetProcAddress failed for %s", name);
+		func = SDL_GL_GetProcAddress( name );
+	}
+#endif
+
+	if( !func )
+	{
+		MsgDev( D_ERROR, "GL_GetProcAddress failed for %s", name );
 	}
 	return func;
 }
@@ -857,21 +562,17 @@ void GL_CheckExtension( const char *name, const dllfunc_t *funcs, const char *cv
 	}
 
 	// clear exports
-#ifndef __ANDROID__
 	for( func = funcs; func && func->name; func++ )
 		*func->func = NULL;
-#endif
 
 
 	GL_SetExtension( r_ext, true ); // predict extension state
-#ifndef __ANDROID__
 	for( func = funcs; func && func->name != NULL; func++ )
 	{
 		// functions are cleared before all the extensions are evaluated
 		if(!(*func->func = (void *)GL_GetProcAddress( func->name )))
 			GL_SetExtension( r_ext, false ); // one or more functions are invalid, extension will be disabled
 	}
-#endif
 
 	if( GL_Support( r_ext ))
 		MsgDev( D_NOTE, "- ^2enabled\n" );
@@ -885,12 +586,6 @@ GL_BuildGammaTable
 */
 void GL_BuildGammaTable( void )
 {
-#ifdef PANDORA
-	char buff[100];
-	float gamma = vid_gamma->value;
-	snprintf(buff, 100, "sudo -n /usr/pandora/scripts/op_gamma.sh %f", gamma);
-	system(buff);
-#else
 	int	i, v;
 	double	invGamma, div;
 
@@ -907,7 +602,6 @@ void GL_BuildGammaTable( void )
 		glState.gammaRamp[i+256] = ((word)bound( 0, v, 65535 ));
 		glState.gammaRamp[i+512] = ((word)bound( 0, v, 65535 ));
 	}
-#endif
 }
 
 /*
@@ -920,9 +614,7 @@ void GL_UpdateGammaRamp( void )
 	if( !glConfig.deviceSupportsGamma ) return;
 
 	GL_BuildGammaTable();
-#ifdef XASH_SDL
 	SDL_SetWindowGammaRamp( host.hWnd, &glState.gammaRamp[0], &glState.gammaRamp[256], &glState.gammaRamp[512] );
-#endif
 }
 
 /*
@@ -934,18 +626,14 @@ void GL_UpdateSwapInterval( void )
 {
 	if( cls.state < ca_active )
 	{
-#ifdef XASH_SDL
 		SDL_GL_SetSwapInterval( 0 );
 		gl_swapInterval->modified = true;
-#endif
 	}
 	else if( gl_swapInterval->modified )
 	{
 		gl_swapInterval->modified = false;
-#ifdef XASH_SDL
-		if( SDL_GL_SetSwapInterval(gl_swapInterval->integer) )
-			MsgDev(D_ERROR, "SDL_GL_SetSwapInterval: %s\n", SDL_GetError());
-#endif
+		if( SDL_GL_SetSwapInterval( gl_swapInterval->integer ) )
+			MsgDev( D_ERROR, "SDL_GL_SetSwapInterval: %s\n", SDL_GetError() );
 	}
 }
 
@@ -987,9 +675,7 @@ GL_ContextError
 */
 static void GL_ContextError( void )
 {
-#ifdef XASH_SDL
 	MsgDev( D_ERROR, "GL_ContextError: %s\n", SDL_GetError() );
-#endif
 }
 
 /*
@@ -999,7 +685,6 @@ GL_SetupAttributes
 */
 void GL_SetupAttributes()
 {
-#ifdef XASH_SDL
 	SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
 	SDL_GL_SetAttribute(SDL_GL_ACCELERATED_VISUAL, 1);
 
@@ -1015,7 +700,6 @@ void GL_SetupAttributes()
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 1);
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 1);
 #endif
-#endif // XASH_SDL
 }
 
 /*
@@ -1025,18 +709,15 @@ GL_CreateContext
 */
 qboolean GL_CreateContext( void )
 {
-#ifdef __ANDROID__
-	nanoGL_Init();
-#endif
+
 	/*if( !Sys_CheckParm( "-gldebug" ) || host.developer < 1 ) // debug bit the kills perfomance
 		return true;*/
-#ifdef XASH_SDL
+
 	if( ( glw_state.context = SDL_GL_CreateContext( host.hWnd ) ) == NULL)
 	{
 		MsgDev(D_ERROR, "GL_CreateContext: %s\n", SDL_GetError());
 		return GL_DeleteContext();
 	}
-#endif
 	return true;
 }
 
@@ -1047,13 +728,11 @@ GL_UpdateContext
 */
 qboolean GL_UpdateContext( void )
 {
-#ifdef XASH_SDL
 	if(!( SDL_GL_MakeCurrent( host.hWnd, glw_state.context ) ) )
 	{
 		MsgDev(D_ERROR, "GL_UpdateContext: %s", SDL_GetError());
 		return GL_DeleteContext();
 	}
-#endif
 	return true;
 }
 
@@ -1064,74 +743,12 @@ GL_DeleteContext
 */
 qboolean GL_DeleteContext( void )
 {
-#ifdef XASH_SDL
 	SDL_GL_DeleteContext(glw_state.context);
-#endif
 	glw_state.context = NULL;
 
 	return false;
 }
-#ifdef XASH_SDL
-/*
-=================
-VID_ChoosePFD
-=================
-*/
-static int VID_ChoosePFD( SDL_PixelFormat *pfd, int colorBits, int alphaBits, int depthBits, int stencilBits )
-{
-	/*int	pixelFormat = 0;
-
-	MsgDev( D_NOTE, "VID_ChoosePFD( color %i, alpha %i, depth %i, stencil %i )\n", colorBits, alphaBits, depthBits, stencilBits );
-
-	// Fill out the PFD
-	pfd->nSize = sizeof (PIXELFORMATDESCRIPTOR);
-	pfd->nVersion = 1;
-	pfd->dwFlags = PFD_DRAW_TO_WINDOW|PFD_SUPPORT_OPENGL|PFD_DOUBLEBUFFER;
-	pfd->iPixelType = PFD_TYPE_RGBA;
-
-	pfd->cColorBits = colorBits;
-	pfd->cRedBits = 0;
-	pfd->cRedShift = 0;
-	pfd->cGreenBits = 0;
-	pfd->cGreenShift = 0;
-	pfd->cBlueBits = 0;
-	pfd->cBlueShift = 0;	// wow! Blue Shift %)
-
-	pfd->cAlphaBits = alphaBits;
-	pfd->cAlphaShift = 0;
-
-	pfd->cAccumBits = 0;
-	pfd->cAccumRedBits = 0;
-	pfd->cAccumGreenBits = 0;
-	pfd->cAccumBlueBits = 0;
-	pfd->cAccumAlphaBits= 0;
-
-	pfd->cDepthBits = depthBits;
-	pfd->cStencilBits = stencilBits;
-
-	pfd->cAuxBuffers = 0;
-	pfd->iLayerType = PFD_MAIN_PLANE;
-	pfd->bReserved = 0;
-
-	pfd->dwLayerMask = 0;
-	pfd->dwVisibleMask = 0;
-	pfd->dwDamageMask = 0;
-
-	// count PFDs
-	pixelFormat = ChoosePixelFormat( glw_state.hDC, pfd );
-
-	if( !pixelFormat )
-	{
-		MsgDev( D_ERROR, "VID_ChoosePFD failed\n" );
-		return 0;
-	}
-
-	return pixelFormat;*/
-
-	return 0;
-}
-#endif
-#ifdef _WIN32
+#if defined( _WIN32 )
 BOOL CALLBACK pfnEnumWnd( HWND hwnd, LPARAM lParam )
 {
 	string	wndname;
@@ -1143,8 +760,7 @@ BOOL CALLBACK pfnEnumWnd( HWND hwnd, LPARAM lParam )
 	}
 	return true;
 }
-#else
-#ifdef XASH_X11
+#elif defined( XASH_X11 )
 Window* NetClientList(Display* display, unsigned long *len)
 {
 	Window* windowList;
@@ -1205,17 +821,15 @@ char* WindowClassName(Display* display, Window window)
 	return className;
 }
 #endif
-#endif
 
 uint VID_EnumerateInstances( void )
 {
 	num_instances = 0;
 
-#ifdef _WIN32
+#if defined(_WIN32)
 	if( EnumWindows( &pfnEnumWnd, 0 ))
 		return num_instances;
-#else
-#ifdef XASH_X11
+#elif defined(XASH_X11)
 	Display* display = XOpenDisplay(NULL);
 	Window* winlist;
 	char* name;
@@ -1240,7 +854,6 @@ uint VID_EnumerateInstances( void )
 
 	XFree(winlist);
 #endif
-#endif
 	return 1;
 }
 
@@ -1254,19 +867,10 @@ void VID_StartupGamma( void )
 	// init gamma ramp
 	Q_memset( glState.stateRamp, 0, gammaTypeSize);
 
-#if !defined (__ANDROID__) && defined(XASH_SDL)
-	glConfig.deviceSupportsGamma = !SDL_GetWindowGammaRamp( host.hWnd, NULL, NULL, NULL);
+#if defined (__ANDROID__) && defined( PANDORA )
+	glConfig.deviceSupportsGamma = 0; // disable hw gamma, so Xash will use software
 #else
-	// Android doesn't support hw gamma. (thanks, SDL!)
-
-#ifdef PANDORA
-	glConfig.deviceSupportsGamma = 1;
-	BuildGammaTable( vid_gamma->value, vid_texgamma->value );
-	GL_BuildGammaTable();
-	return;
-#else
-	glConfig.deviceSupportsGamma = 0;
-#endif
+	glConfig.deviceSupportsGamma = !SDL_GetWindowGammaRamp( host.hWnd, NULL, NULL, NULL);;
 #endif
 
 	if( !glConfig.deviceSupportsGamma )
@@ -1361,100 +965,8 @@ void VID_RestoreGamma( void )
 	// don't touch gamma if multiple instances was running
 	if( VID_EnumerateInstances( ) > 1 ) return;
 
-#ifdef PANDORA
-	system("sudo -n /usr/pandora/scripts/op_gamma.sh 0");
-#elif defined XASH_SDL
 	SDL_SetWindowGammaRamp( host.hWnd, &glState.stateRamp[0],
 			&glState.stateRamp[256], &glState.stateRamp[512] );
-#endif
-}
-
-/*
-=================
-GL_SetPixelformat
-=================
-*/
-qboolean GL_SetPixelformat( void )
-{
-	/*PIXELFORMATDESCRIPTOR	PFD;
-	int			alphaBits;
-	int			stencilBits;
-	int			pixelFormat;
-
-	if(( glw_state.hDC = GetDC( host.hWnd )) == NULL )
-		return false;
-
-	// set alpha/stencil
-	alphaBits = bound( 0, gl_alphabits->integer, 8 );
-	stencilBits = bound( 0, gl_stencilbits->integer, 8 );
-
-	if( glw_state.desktopBitsPixel < 32 )
-	{
-		// clear alphabits in case we in 16-bit mode
-		alphaBits = 0;
-	}
-
-	// choose a pixel format
-	pixelFormat = VID_ChoosePFD( &PFD, 24, alphaBits, 32, stencilBits );
-
-	if( !pixelFormat )
-	{
-		// try again with default color/depth/stencil
-		pixelFormat = VID_ChoosePFD( &PFD, 24, 0, 32, 0 );
-
-		if( !pixelFormat )
-		{
-			MsgDev( D_ERROR, "GL_SetPixelformat: failed to find an appropriate PIXELFORMAT\n" );
-			return false;
-		}
-	}
-
-	// set the pixel format
-	if( !SetPixelFormat( glw_state.hDC, pixelFormat, &PFD ))
-	{
-		MsgDev( D_ERROR, "GL_SetPixelformat: failed\n" );
-		return false;
-	}
-
-	DescribePixelFormat( glw_state.hDC, pixelFormat, sizeof( PIXELFORMATDESCRIPTOR ), &PFD );
-
-	if( PFD.dwFlags & PFD_GENERIC_FORMAT )
-	{
-		if( PFD.dwFlags & PFD_GENERIC_ACCELERATED )
-		{
-			MsgDev( D_NOTE, "VID_ChoosePFD: using Generic MCD acceleration\n" );
-			glw_state.software = false;
-		}
-		else if( gl_allow_software->integer )
-		{
-			MsgDev( D_NOTE, "VID_ChoosePFD: using software emulation\n" );
-			glw_state.software = true;
-		}
-		else
-		{
-			MsgDev( D_ERROR, "GL_SetPixelformat: no hardware acceleration found\n" );
-			return false;
-		}
-	}
-	else
-	{
-		MsgDev( D_NOTE, "VID_ChoosePFD: using hardware acceleration\n");
-		glw_state.software = false;
-	}
-
-	glConfig.color_bits = PFD.cColorBits;
-	glConfig.alpha_bits = PFD.cAlphaBits;
-	glConfig.depth_bits = PFD.cDepthBits;
-	glConfig.stencil_bits = PFD.cStencilBits;
-
-	if( PFD.cStencilBits != 0 )
-		glState.stencilEnabled = true;
-	else glState.stencilEnabled = false;
-
-	// print out PFD specifics 
-	MsgDev( D_NOTE, "GL PFD: color( %d-bits ) alpha( %d-bits ) Z( %d-bit )\n", PFD.cColorBits, PFD.cAlphaBits, PFD.cDepthBits );*/
-
-	return true;
 }
 
 void R_SaveVideoMode( int vid_mode )
@@ -1472,17 +984,13 @@ void R_SaveVideoMode( int vid_mode )
 	MsgDev( D_INFO, "Set: %s [%dx%d]\n", vidmode[mode].desc, vidmode[mode].width, vidmode[mode].height );
 #else
 	// Auto-detect of screen size on Android Devices
-#ifdef XASH_SDL
 	SDL_DisplayMode displayMode;
 
 	SDL_GetCurrentDisplayMode(0, &displayMode);
 
 	glState.width = displayMode.w;
 	glState.height = displayMode.h;
-#else
-	Android_GetScreenRes(&glState.width, &glState.height);
-	//glState.width = glState.height = 600;
-#endif
+
 	glState.wideScreen = true;
 
 	Cvar_FullSet( "width", va( "%i", glState.width ), CVAR_READ_ONLY );
@@ -1512,7 +1020,6 @@ qboolean R_DescribeVIDMode( int width, int height )
 
 qboolean VID_CreateWindow( int width, int height, qboolean fullscreen )
 {
-#ifdef XASH_SDL
 	static string	wndname;
 	Uint32 wndFlags = SDL_WINDOW_INPUT_GRABBED |
 		SDL_WINDOW_MOUSE_FOCUS | SDL_WINDOW_OPENGL;
@@ -1563,11 +1070,9 @@ qboolean VID_CreateWindow( int width, int height, qboolean fullscreen )
 		// info.info.info.info.info... Holy shit, SDL?
 		SetClassLong(info.info.win.window, GCL_HICON, ico);
 	}
-
 #else
 	SDL_Surface *ico;
 
-#ifdef _WIN32
 	// find the icon file in the filesystem
 	if( FS_FileExists( GI->iconpath, true ))
 	{
@@ -1584,9 +1089,7 @@ qboolean VID_CreateWindow( int width, int height, qboolean fullscreen )
 			ico = NULL;
 		}
 	}
-	else 
-#endif
-	ico = NULL;
+	else ico = NULL;
 
 	// ico is NULL because there is no resource for standart icon. Sorry about that.
 	if(ico) SDL_SetWindowIcon(host.hWnd, ico);
@@ -1594,23 +1097,6 @@ qboolean VID_CreateWindow( int width, int height, qboolean fullscreen )
 
 	SDL_ShowWindow( host.hWnd );
 
-	// init all the gl stuff for the window
-	if( !GL_SetPixelformat( ))
-	{
-		SDL_HideWindow( host.hWnd );
-		SDL_DestroyWindow( host.hWnd );
-		host.hWnd = NULL;
-
-		MsgDev( D_ERROR, "OpenGL driver not installed\n" );
-
-		return false;
-	}
-#else
-	host.hWnd = 1; //fake window
-	GL_SetPixelformat( );
-	host.window_center_x = width / 2;
-	host.window_center_y = height / 2;
-#endif
 	if( !glw_state.initialized )
 	{
 		if( !GL_CreateContext( ))
@@ -1628,7 +1114,6 @@ qboolean VID_CreateWindow( int width, int height, qboolean fullscreen )
 
 void VID_DestroyWindow( void )
 {
-#ifdef XASH_SDL
 	if( glw_state.context )
 	{
 		SDL_GL_DeleteContext( glw_state.context );
@@ -1640,7 +1125,7 @@ void VID_DestroyWindow( void )
 		SDL_DestroyWindow ( host.hWnd );
 		host.hWnd = NULL;
 	}
-#endif
+
 	if( glState.fullScreen )
 	{
 		glState.fullScreen = false;
@@ -1648,7 +1133,6 @@ void VID_DestroyWindow( void )
 }
 rserr_t R_ChangeDisplaySettings( int vid_mode, qboolean fullscreen )
 {
-#ifdef XASH_SDL
 	int	width, height;
 	SDL_DisplayMode displayMode;
 
@@ -1681,17 +1165,6 @@ rserr_t R_ChangeDisplaySettings( int vid_mode, qboolean fullscreen )
 			return rserr_invalid_mode;
 		}
 	}
-#else
-	R_SaveVideoMode( vid_mode );
-	glw_state.desktopWidth = r_width->integer;
-	glw_state.desktopHeight = r_height->integer;
-	glw_state.desktopBitsPixel = 32;
-	if(!host.hWnd)
-	{
-		if( !VID_CreateWindow( 640, 480, fullscreen ) )
-			return rserr_invalid_mode;
-	}
-#endif
 	return rserr_ok;
 }
 
@@ -1704,13 +1177,9 @@ Set the described video mode
 */
 qboolean VID_SetMode( void )
 {
-#ifdef XASH_SDL
 	qboolean	fullscreen = false;
 	rserr_t	err;
 
-#ifdef PANDORA
-	fullscreen = true;
-#else
 	if( vid_mode->integer == -1 )	// trying to get resolution automatically by default
 	{
 		SDL_DisplayMode mode;
@@ -1731,21 +1200,12 @@ qboolean VID_SetMode( void )
 			Cvar_SetFloat( "vid_mode", VID_DEFAULTMODE );
 		}
 	}
-#endif
 	gl_swapInterval->modified = true;
 	fullscreen = Cvar_VariableInteger("fullscreen");
 
-#ifdef PANDORA
-    if(( err = R_ChangeDisplaySettings( 10, fullscreen )) == rserr_ok )
-#else
 	if(( err = R_ChangeDisplaySettings( vid_mode->integer, fullscreen )) == rserr_ok )
-#endif
 	{
-#ifdef PANDORA
-		glConfig.prev_mode = 10;
-#else
 		glConfig.prev_mode = vid_mode->integer;
-#endif
 	}
 	else
 	{
@@ -1769,13 +1229,6 @@ qboolean VID_SetMode( void )
 			return false;
 		}
 	}
-#else
-	gl_swapInterval->modified = true;
-	MsgDev( D_ERROR, "VID_SetMode: enabling fake window\n" );
-	Cvar_SetFloat( "vid_mode", 10 );
-	Cvar_SetFloat( "fullscreen", 1 );
-        R_ChangeDisplaySettings( vid_mode->integer, true );
-#endif
 	return true;
 }
 
@@ -1818,13 +1271,37 @@ R_Init_OpenGL
 qboolean R_Init_OpenGL( void )
 {
 	GL_SetupAttributes();
-#ifdef XASH_SDL
+#ifdef __ANDROID__
+	nanoGLHandle = dlopen( "/data/data/in.celest.xash3d.hl/libs/libNanoGL.so", RTLD_NOW );
+
+	dllfunc_t *func;
+
+	if( !nanoGLHandle )
+	{
+		Host_Error( "Failed initialize NanoGL: %s", dlerror() );
+	}
+
+	for( func = nanogl_funcs; func && func->name; func++ )
+	{
+		*func->func = dlsym( nanoGLHandle, func->name);
+		if( *func->func )
+		{
+			MsgDev(D_INFO, "%s resolved!", func->name);
+		}
+		else
+		{
+			Host_Error( "Failed initialize NanoGL: %s", dlerror() );
+		}
+	}
+
+	pnanoGL_Init();
+#endif
+
 	if( SDL_GL_LoadLibrary( NULL ) )
 	{
 		MsgDev( D_ERROR, "Couldn't initialize OpenGL: %s\n", SDL_GetError());
 		return false;
 	}
-#endif
 	return VID_SetMode();
 }
 
@@ -1840,9 +1317,16 @@ void R_Free_OpenGL( void )
 	GL_DeleteContext ();
 
 	VID_DestroyWindow ();
-#ifdef XASH_SDL
-	SDL_GL_UnloadLibrary ();
+
+#ifdef __ANDROID__
+	pnanoGL_Destroy();
+
+	dlclose( nanoGLHandle );
+	nanoGLHandle = NULL;
 #endif
+
+	SDL_GL_UnloadLibrary ();
+
 	// now all extensions are disabled
 	Q_memset( glConfig.extension, 0, sizeof( glConfig.extension[0] ) * GL_EXTCOUNT );
 	glw_state.initialized = false;
@@ -2048,6 +1532,11 @@ void GL_RemoveCommands( void )
 
 void GL_InitExtensions( void )
 {
+#ifdef __ANDROID__
+	// initialize GL to GLES translator
+
+	//GL_CheckExtension( "NanoGL", nanogl_funcs, NULL, GL_NANOGL );
+#endif
 	// initialize gl extensions
 	GL_CheckExtension( "OpenGL 1.1.0", opengl_110funcs, NULL, GL_OPENGL_110 );
 
@@ -2155,9 +1644,8 @@ void GL_InitExtensions( void )
 	GL_CheckExtension( "GL_ARB_vertex_buffer_object", vbofuncs, "gl_vertex_buffer_object", GL_ARB_VERTEX_BUFFER_OBJECT_EXT );
 
 	// we don't care if it's an extension or not, they are identical functions, so keep it simple in the rendering code
-#ifndef __ANDROID__
 	if( pglDrawRangeElementsEXT == NULL ) pglDrawRangeElementsEXT = pglDrawRangeElements;
-#endif
+
 	GL_CheckExtension( "GL_ARB_texture_env_add", NULL, "gl_texture_env_add", GL_TEXTURE_ENV_ADD_EXT );
 
 	// vp and fp shaders
@@ -2192,13 +1680,11 @@ void GL_InitExtensions( void )
 		glConfig.texRectangle = GL_TEXTURE_RECTANGLE_NV;
 		pglGetIntegerv( GL_MAX_RECTANGLE_TEXTURE_SIZE_NV, &glConfig.max_2d_rectangle_size );
 	}
-#ifndef __ANDROID__
 	else if( Q_strstr( glConfig.extensions_string, "GL_EXT_texture_rectangle" ))
 	{
 		glConfig.texRectangle = GL_TEXTURE_RECTANGLE_EXT;
 		pglGetIntegerv( GL_MAX_RECTANGLE_TEXTURE_SIZE_EXT, &glConfig.max_2d_rectangle_size );
 	}
-#endif
 	else glConfig.texRectangle = glConfig.max_2d_rectangle_size = 0; // no rectangle
 
 	glConfig.max_2d_texture_size = 0;
@@ -2345,3 +1831,5 @@ void GL_CheckForErrors_( const char *filename, const int fileline )
 
 	Host_Error( "GL_CheckForErrors: %s (called at %s:%i)\n", str, filename, fileline );
 }
+
+#endif // XASH_SDL
