@@ -75,6 +75,7 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalDependencies>SDL2.lib;SDL2main.lib</AdditionalDependencies>
       <AdditionalLibraryDirectories>..\Debug;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+<AdditionalOptions>/NODEFAULTLIB:msvcrt.lib %(AdditionalOptions)</AdditionalOptions>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
