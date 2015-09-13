@@ -86,7 +86,7 @@
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <PreprocessorDefinitions>XASH_SDL;XASH_VGUI;WIN32;NDEBUG;_WINDOWS;%(PreprocessorDefinitions);_CRT_SECURE_NO_WARNINGS</PreprocessorDefinitions>
       <SDLCheck>true</SDLCheck>
-
+<RuntimeLibrary>MultiThreaded</RuntimeLibrary>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -101,4 +101,3 @@
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
 </Project>
-<RuntimeLibrary>MultiThreaded</RuntimeLibrary>
