@@ -246,7 +246,7 @@ particle_t *CL_AllocParticle( void (*callback)( particle_t*, float ))
 
 	if( !cl_free_particles )
 	{
-		MsgDev( D_INFO, "Overflow %d particles\n", GI->max_particles );
+		MsgDev( D_NOTE, "Overflow %d particles\n", GI->max_particles );
 		return NULL;
 	}
 
@@ -538,7 +538,7 @@ void CL_DrawParticles( void )
 	if( !cl_draw_particles->integer )
 		return;
 
-	// don't evaluate particles when executes many times
+	// don't evaluate particles when executed many times
 	// at same frame e.g. mirror rendering
 	if( framecount != tr.realframecount )
 	{

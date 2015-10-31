@@ -401,7 +401,7 @@ void SV_CreateDecal( sizebuf_t *msg, const float *origin, int decalIndex, int en
 	if( msg == &sv.signon && sv.state != ss_loading )
 		return;
 
-	// this can happens if serialized map contain 4096 static decals...
+	// this can happen if serialized map contains 4096 static decals...
 	if(( BF_GetNumBytesWritten( msg ) + 20 ) >= BF_GetMaxBytes( msg ))
 		return;
 
@@ -435,7 +435,7 @@ void SV_CreateStudioDecal( sizebuf_t *msg, const float *origin, const float *sta
 	ASSERT( origin );
 	ASSERT( start );
 
-	// this can happens if serialized map contain 4096 static decals...
+	// this can happen if serialized map contains 4096 static decals...
 	if(( BF_GetNumBytesWritten( msg ) + 30 ) >= BF_GetMaxBytes( msg ))
 		return;
 
@@ -472,7 +472,7 @@ void SV_CreateStaticEntity( sizebuf_t *msg, sv_static_entity_t *ent )
 {
 	int	index, i;
 
-	// this can happens if serialized map contain too many static entities...
+	// this can happen if serialized map contains too many static entities...
 	if(( BF_GetNumBytesWritten( msg ) + 64 ) >= BF_GetMaxBytes( msg ))
 		return;
 
@@ -868,6 +868,14 @@ void SV_FreeEdict( edict_t *pEdict )
 	pEdict->v.takedamage = 0;
 	pEdict->v.modelindex = 0;
 	pEdict->v.nextthink = -1;
+	// reset vars
+	pEdict->v.colormap = 0;
+	pEdict->v.takedamage = 0;
+	pEdict->v.frame = 0;
+	pEdict->v.scale = 0;
+	pEdict->v.gravity = 0;
+	VectorClear(pEdict->v.angles);
+	VectorClear(pEdict->v.origin);
 	pEdict->free = true;
 }
 
@@ -3182,7 +3190,7 @@ pfnFunctionFromName
 */
 dword pfnFunctionFromName( const char *pName )
 {
-	return  Com_FunctionFromName( svgame.hInstance, pName );
+	return Com_FunctionFromName( svgame.hInstance, pName );
 }
 
 /*
@@ -4832,7 +4840,9 @@ qboolean SV_LoadProgs( const char *name )
 	static globalvars_t		gpGlobals;
 	static playermove_t		gpMove;
 	edict_t			*e;
+#ifdef DLL_LOADER
 	qboolean dll;
+#endif
 
 	if( svgame.hInstance ) SV_UnloadProgs();
 
