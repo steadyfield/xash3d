@@ -4823,6 +4823,7 @@ qboolean SV_LoadProgs( const char *name )
 #ifdef DLL_LOADER
 	qboolean dll;
 #endif
+	DLL_FUNCTIONS	dllFuncs;
 
 	if( svgame.hInstance ) SV_UnloadProgs();
 
@@ -4898,12 +4899,12 @@ qboolean SV_LoadProgs( const char *name )
 	version = INTERFACE_VERSION;
 	if( GetEntityAPI2 )
 	{
-		if( !GetEntityAPI2( &svgame.dllFuncs, &version ))
+		if( !GetEntityAPI2( &dllFuncs, &version ))
 		{
 			MsgDev( D_WARN, "SV_LoadProgs: interface version %i should be %i\n", INTERFACE_VERSION, version );
 
 			// fallback to old API
-			if( !GetEntityAPI( &svgame.dllFuncs, version ))
+			if( !GetEntityAPI( &dllFuncs, version ))
 			{
 				Com_FreeLibrary( svgame.hInstance );
 				MsgDev( D_ERROR, "SV_LoadProgs: couldn't get entity API\n" );
@@ -4913,13 +4914,15 @@ qboolean SV_LoadProgs( const char *name )
 		}
 		else MsgDev( D_AICONSOLE, "SV_LoadProgs: ^2initailized extended EntityAPI ^7ver. %i\n", version );
 	}
-	else if( !GetEntityAPI( &svgame.dllFuncs, version ))
+	else if( !GetEntityAPI( &dllFuncs, version ))
 	{
 		Com_FreeLibrary( svgame.hInstance );
 		MsgDev( D_ERROR, "SV_LoadProgs: couldn't get entity API\n" );
 		svgame.hInstance = NULL;
 		return false;
 	}
+
+	Q_memcpy( &svgame.dllFuncs, &dllFuncs, sizeof( dllFuncs ) );
 
 	Mod_InitStudioAPI();
 
