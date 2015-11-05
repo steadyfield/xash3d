@@ -4782,6 +4782,7 @@ void SV_UnloadProgs( void )
 {
 	if( !svgame.hInstance )
 		return;
+	host.dlsym_metamod = 0;
 	
 	SV_DeactivateServer ();
 	Delta_Shutdown ();
@@ -4847,6 +4848,7 @@ qboolean SV_LoadProgs( const char *name )
 	Q_memcpy( &gpEngfuncs, &gEngfuncs, sizeof( gpEngfuncs ));
 
 	GetEntityAPI = (APIFUNCTION)Com_GetProcAddress( svgame.hInstance, "GetEntityAPI" );
+	host.dlsym_metamod = Com_GetProcAddress( svgame.hInstance, "dlsym_metamod" );
 	GetEntityAPI2 = (APIFUNCTION2)Com_GetProcAddress( svgame.hInstance, "GetEntityAPI2" );
 	GiveNewDllFuncs = (NEW_DLL_FUNCTIONS_FN)Com_GetProcAddress( svgame.hInstance, "GetNewDLLFunctions" );
 	if( !GetEntityAPI && !GetEntityAPI2 )

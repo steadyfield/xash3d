@@ -367,6 +367,7 @@ typedef struct host_parm_s
 	int		numsounds;
 	qboolean enabledll;
 	char vguiloader[64];
+	void *( *dlsym_metamod ) ( void*, char* );
 } host_parm_t;
 
 extern host_parm_t	host;

@@ -90,6 +90,8 @@ void Com_FreeLibrary( void *hInstance )
 
 void *Com_GetProcAddress( void *hInstance, const char *name )
 {
+	if( host.dlsym_metamod )
+		return host.dlsym_metamod( hInstance, name );
 #ifdef DLL_LOADER
 	void *wm;
 	if( host.enabledll && (wm = Loader_GetDllHandle( hInstance )) )

@@ -782,7 +782,7 @@ void Host_InitCommon( int argc, const char** argv, const char *progname, qboolea
 	if( host.enabledll )
 		Setup_LDT_Keeper( ); // Must call before creating any thread
 #endif
-
+	host.dlsym_metamod = 0;
 #ifdef XASH_SDL
 	if( SDL_Init( SDL_INIT_VIDEO |
 				SDL_INIT_TIMER |
