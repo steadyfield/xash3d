@@ -180,13 +180,15 @@ static void Mem_FreeBlock( memheader_t *mem, const char *filename, int fileline 
 	if( mem->sentinel1 != MEMHEADER_SENTINEL1 )
 	{
 		mem->filename = Mem_CheckFilename( mem->filename ); // make sure what we don't crash var_args
-		Sys_Error( "Mem_Free: trashed header sentinel 1 (alloc at %s:%i, free at %s:%i)\n", mem->filename, mem->fileline, filename, fileline );
+		MsgDev( D_ERROR, "Mem_Free: trashed header sentinel 1 (alloc at %s:%i, free at %s:%i)\n", mem->filename, mem->fileline, filename, fileline );
+		return;
 	}
 
 	if( *((byte *)mem + sizeof( memheader_t ) + mem->size ) != MEMHEADER_SENTINEL2 )
 	{	
 		mem->filename = Mem_CheckFilename( mem->filename ); // make sure what we don't crash var_args
-		Sys_Error( "Mem_Free: trashed header sentinel 2 (alloc at %s:%i, free at %s:%i)\n", mem->filename, mem->fileline, filename, fileline );
+		MsgDev( D_ERROR, "Mem_Free: trashed header sentinel 2 (alloc at %s:%i, free at %s:%i), at %p\n", mem->filename, mem->fileline, filename, fileline, ((byte *)mem + sizeof( memheader_t ) + mem->size ) );
+		return;
 	}
 
 	pool = mem->pool;

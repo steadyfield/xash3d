@@ -4838,6 +4838,10 @@ qboolean SV_LoadProgs( const char *name )
 #endif
 	if( !svgame.hInstance ) return false;
 
+	// set entity count as edict may be allocated on amx plugins initialization
+	svgame.globals->maxEntities = GI->max_edicts;
+	svgame.globals->maxClients = sv_maxclients->integer;
+
 	// make sure what new dll functions is cleared
 	Q_memset( &svgame.dllFuncs2, 0, sizeof( svgame.dllFuncs2 ));
 
