@@ -8,6 +8,9 @@ os: Windows Server 2012
 
 clone_folder: c:\projects\xash\xash3d
 
+configuration:
+  - Release
+
 build:
   project: xash.sln
 
