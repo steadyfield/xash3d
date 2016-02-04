@@ -36,10 +36,6 @@ set (CMAKE_C_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE}")
 set (CMAKE_C_FLAGS_MINSIZEREL "${CMAKE_CXX_FLAGS_MINSIZEREL}")
 set (CMAKE_C_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELWITHDEBINFO}")
 
-if(PANDORA)
-        add_definitions(-DPANDORA)
-endif()
-
 set (XASH_ENGINE_LIBRARY xash)
 
 file (GLOB_RECURSE XASH_ENGINE_SOURCES *.cpp *.c)
@@ -72,14 +68,12 @@ if(XASH_NONSTANDART_LOAD)
 endif()
 
 if(XASH_SDL)
-    include(FindPkgConfig)
-    pkg_search_module(SDL2 REQUIRED sdl2)
-    pkg_search_module(SDL2_IMAGE REQUIRED SDL2_image)
+    find_package(SDL2 REQUIRED)
 
-    include_directories(${SDL2_INCLUDE_DIRS} ${SDL2_IMAGE_INCLUDE_DIRS})
+    include_directories(${SDL2_INCLUDE_DIR})
 
     add_definitions(-DXASH_SDL)
-    target_link_libraries(${XASH_ENGINE_LIBRARY} ${SDL2_LIBRARIES} ${SDL2_IMAGE_LIBRARIES})
+    target_link_libraries(${XASH_ENGINE_LIBRARY} ${SDL2_LIBRARY})
 endif()
 
 if(XASH_VGUI)
@@ -108,7 +102,9 @@ endif()
 
 if(XASH_DEDICATED)
     add_definitions(-DXASH_DEDICATED)
-    target_link_libraries(${XASH_ENGINE_LIBRARY} -lrt)
+    if(LINUX)
+    	target_link_libraries(${XASH_ENGINE_LIBRARY} -lrt)
+    endif()
 endif()
 
 target_link_libraries(${XASH_ENGINE_LIBRARY}

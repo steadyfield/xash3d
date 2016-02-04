@@ -26,10 +26,6 @@ GNU General Public License for more details.
 
 #define MAX_FORWARD		6
 
-#ifdef XASH_SDL
-convar_t *m_valvehack = 0;
-#endif
-
 qboolean CL_IsPlayerIndex( int idx )
 {
 	if( idx > 0 && idx <= cl.maxclients )
@@ -497,8 +493,12 @@ Set new weapon animation
 void CL_WeaponAnim( int iAnim, int body )
 {
 	cl_entity_t	*view = &clgame.viewent;
-
-	view->curstate.modelindex = cl.frame.local.client.viewmodel;
+	cl.weaponstarttime = 0;
+	cl.weaponseq = iAnim;
+	if( cl_predict->value || !cl_lw->value )
+		view->curstate.modelindex = cl.frame.local.client.viewmodel;
+	else
+		view->curstate.modelindex = cl.predicted_viewmodel;
 
 	// anim is changed. update latchedvars
 	if( iAnim != view->curstate.sequence )
@@ -515,7 +515,7 @@ void CL_WeaponAnim( int iAnim, int body )
 		view->latched.sequencetime = 0.0f;
 	}
 
-	view->curstate.animtime = cl.time;	// start immediately
+	view->curstate.animtime = cl.time; // start immediately
 	view->curstate.framerate = 1.0f;
 	view->curstate.sequence = iAnim;
 	view->latched.prevframe = 0.0f;
@@ -1145,11 +1145,7 @@ void CL_ExtraUpdate( void )
 {
 	if( !cls.initialized )
 		return;
-#ifdef XASH_SDL
-	if( !m_valvehack )
-		m_valvehack = Cvar_Get("m_valvehack", "0", CVAR_ARCHIVE, "Enable mouse hack for valve client.so");
-	if( !m_valvehack->integer )
-#endif
+	if( !m_ignore->value )
 		clgame.dllFuncs.IN_Accumulate();
 	S_ExtraUpdate();
 }

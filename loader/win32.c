@@ -71,10 +71,12 @@ for DLL to know too much about its environment.
 #ifdef	HAVE_KSTAT
 #include <kstat.h>
 #endif
-//#if HAVE_MALLOC_H
+#ifdef HAVE_MALLOC_H
 #include <malloc.h>
-//#endif
-
+#endif
+#ifdef HAVE_EXECINFO_H
+#include <execinfo.h>
+#endif
 
 #include <sys/mman.h>
 
@@ -129,13 +131,14 @@ static void c_longcount_notsc(long long* z)
     result+=limit*tv.tv_usec;
     *z=result;
 }
+
+static pthread_mutex_t memmut = PTHREAD_MUTEX_INITIALIZER;
+#if 0
 static unsigned int localcount_stub(void);
 static void longcount_stub(long long*);
 static unsigned int (*localcount)(void)=localcount_stub;
 static void (*longcount)(long long*)=longcount_stub;
 
-static pthread_mutex_t memmut = PTHREAD_MUTEX_INITIALIZER;
-#if 0
 static unsigned int localcount_stub(void)
 {
     unsigned int regs[4];
@@ -359,7 +362,12 @@ void* mreq_private(int size, int to_zero, int type);
 void* mreq_private(int size, int to_zero, int type)
 {
     int nsize = size + sizeof(alloc_header);
+#ifdef HAVE_MEMALIGN
     alloc_header* header = memalign(16, nsize);
+#else
+    alloc_header* header;
+    posix_memalign((void**)&header, 16, nsize);
+#endif
     if (!header)
         return 0;
     if (to_zero)
@@ -4344,6 +4352,11 @@ static int expprintf(const char* format, ...)
     return r;
 }
 
+static int exp_errno()
+{
+    return errno;
+}
+
 static char* expgetenv(const char* varname)
 {
     char* v = getenv(varname);
@@ -4561,6 +4574,10 @@ static double expatof(const char *s)
 static char exptoupper(char c)
 {
     return toupper(c);
+}
+static char exptolower(char c)
+{
+    return tolower(c);
 }
 #else
 
@@ -5330,7 +5347,8 @@ struct glfuncs
 
 #define UNDEFF(X, Y) \
     {#X, Y, (void*)-1},
-
+#define WRFF(X) \
+    {#X, -1, (void*)&X},
 static const struct exports exp_kernel32[]=
 {
     FF(GetVolumeInformationA,-1)
@@ -5516,15 +5534,37 @@ static const struct exports exp_msvcrt[]={
     {"??2@YAPAXI@Z", -1, expnew},
     {"_adjust_fdiv", -1, (void*)&_adjust_fdiv},
     {"_winver",-1,(void*)&_winver},
+    {"_write",-1,(void*)&write},
+    {"_open",-1,(void*)&open},
+    {"_close",-1,(void*)&close},
+    {"_getcwd",-1,(void*)&getcwd},
+    {"_wgetcwd",-1,(void*)&getcwd},
+    {"_stat",-1,(void*)&stat},
+    {"_unlink",-1,(void*)&unlink},
+    FF(_errno, -1)
     FF(strrchr, -1)
     FF(strchr, -1)
     FF(strlen, -1)
     FF(strcpy, -1)
     FF(strncpy, -1)
+    //FF(strncat, -1)
     FF(wcscpy, -1)
     FF(strcmp, -1)
     FF(strncmp, -1)
     FF(strcat, -1)
+    //FF(strtol, -1)
+    //FF(strspn, -1)
+    //FF(strpbrk, -1)
+    //FF(strerror, -1)
+    WRFF(strncat)
+    WRFF(strtol)
+    WRFF(strspn)
+    WRFF(strpbrk)
+    WRFF(strerror)
+    WRFF(exit)
+    WRFF(ctime)
+    WRFF(abort)
+    
     FF(_stricmp,-1)
     FF(_strnicmp,-1)
     FF(_strdup,-1)
@@ -5533,6 +5573,7 @@ static const struct exports exp_msvcrt[]={
     FF(isspace, -1)
     FF(isalpha, -1)
     FF(isdigit, -1)
+    WRFF(isupper)
     FF(memmove, -1)
     FF(memcmp, -1)
     FF(memset, -1)
@@ -5549,6 +5590,7 @@ static const struct exports exp_msvcrt[]={
     FF(atan2, -1)
     FF(acos, -1)
     FF(toupper, -1)
+    FF(tolower, -1)
     FF(atoi, -1)
     FF(atof, -1)
     FF(tan, -1)
@@ -5569,6 +5611,9 @@ static const struct exports exp_msvcrt[]={
     FF(fopen,-1)
     FF(fclose,-1)
     FF(fwrite,-1)
+    WRFF(fgets)
+    //FF(feof,-1)
+    WRFF(feof)
     FF(_mkdir,-1)
     FF(fprintf,-1)
     FF(printf,-1)

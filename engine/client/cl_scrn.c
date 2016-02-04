@@ -81,6 +81,8 @@ void SCR_DrawFPS( void )
 	framecount++;
 	calc = framerate;
 
+	if( calc == 0 ) return;
+
 	if( calc < 1.0f )
 	{
 		Q_snprintf( fpsstring, sizeof( fpsstring ), "%4i spf", (int)(1.0f / calc + 0.5f));
@@ -459,6 +461,8 @@ text to the screen.
 */
 void SCR_UpdateScreen( void )
 {
+	host.vrmode = Cvar_VariableValue("vrmode");
+
 	if( !V_PreRender( )) return;
 
 	switch( cls.state )
@@ -492,17 +496,19 @@ void SCR_LoadCreditsFont( void )
 	cls.creditsFont.hFontTexture = GL_LoadTexture( "gfx.wad/creditsfont.fnt", NULL, 0, TF_IMAGE, NULL );
 	R_GetTextureParms( &fontWidth, NULL, cls.creditsFont.hFontTexture );
 
+	if( fontWidth == 0 ) return;
+	
 	// setup creditsfont
 	if( FS_FileExists( "gfx/creditsfont.fnt", false ))
 	{
 		byte	*buffer;
-		size_t	length;
+		fs_offset_t	length;
 		qfont_t	*src;
 
-		// half-life font with variable chars witdh
+		// half-life font with variable chars width
 		buffer = FS_LoadFile( "gfx/creditsfont.fnt", &length, false );
 	
-		if( buffer && length >= sizeof( qfont_t ))
+		if( buffer && length >= ( fs_offset_t )sizeof( qfont_t ))
 		{
 			int	i;
 	
@@ -692,6 +698,6 @@ void SCR_Shutdown( void )
 
 	if( host.state != HOST_RESTART )
 		UI_UnloadProgs();
-
+	cls.creditsFont.valid = false;
 	scr_init = false;
 }

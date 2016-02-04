@@ -207,6 +207,8 @@ typedef struct
 	int		scrollBarWidth;
 	int		scrollBarHeight;
 	int		scrollBarSliding;
+// highlight // mittorn
+	int		highlight;
 } menuScrollList_s;
 
 typedef struct
@@ -377,11 +379,12 @@ typedef struct
 	int		width;
 } uiStatic_t;
 
+extern float	cursorDY;			// use for touch scroll
+extern bool cursorDown;
 extern uiStatic_t		uiStatic;
 
 #define DLG_X ((uiStatic.width - 640) / 2 - 192) // Dialogs are 640px in width
 
-extern char		uiEmptyString[256];	// HACKHACK
 extern const char		*uiSoundIn;
 extern const char		*uiSoundOut;
 extern const char		*uiSoundKey;
@@ -457,6 +460,11 @@ void UI_VidModes_Precache( void );
 void UI_CustomGame_Precache( void );
 void UI_Credits_Precache( void );
 void UI_GoToSite_Precache( void );
+void UI_Touch_Precache( void );
+void UI_TouchOptions_Precache( void );
+void UI_TouchButtons_Precache( void );
+void UI_TouchEdit_Precache( void );
+void UI_FileDialog_Precache( void );
 
 // Menus
 void UI_Main_Menu( void );
@@ -479,7 +487,13 @@ void UI_VidOptions_Menu( void );
 void UI_VidModes_Menu( void );
 void UI_CustomGame_Menu( void );
 void UI_Credits_Menu( void );
-
+void UI_Touch_Menu( void );
+void UI_TouchOptions_Menu( void );
+void UI_TouchButtons_Menu( void );
+void UI_TouchEdit_Menu( void );
+void UI_FileDialog_Menu( void );
+void UI_TouchButtons_AddButtonToList( const char *name, const char *texture, const char *command, unsigned char *color, int flags );
+void UI_TouchButtons_GetButtonList();
 //
 //-----------------------------------------------------
 //
@@ -489,6 +503,18 @@ public:
 	// Game information
 	GAMEINFO		m_gameinfo;
 };
+
+typedef struct
+{
+	char patterns[32][256];
+	int npatterns;
+	char result[256];
+	bool valid;
+	void ( * callback )( bool success );
+	bool preview;
+} uiFileDialogGlobal_t;
+
+extern uiFileDialogGlobal_t uiFileDialogGlobal;
 
 extern CMenu gMenu;
 

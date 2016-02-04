@@ -30,7 +30,6 @@ project (XASH3D)
 set (XASH3D_VERSION 0.15)
 set (HL_SDK_DIR /opt/halflife CACHE PATH "Half Life 1 SDK directory")
 
-option(PANDORA "Set to ON if targeting an OpenPandora device." ${PANDORA})
 option(XASH_DEDICATED "Enable dedicated build." ${XASH_DEDICATED})
 option(XASH_DLL_LOADER "Enable DLL loading on x86 Linux." ${XASH_DLL_LOADER})
 option(XASH_IPX "Enable IPX support for networking. Windows only." ${XASH_IPX})
@@ -43,6 +42,8 @@ option(XASH_X11 "Enable X11 support." ${XASH_VGUI})
 #-----------------
 # MAIN BUILD CODE \
 ###################\
+
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/")
 
 # Build 32-bit Xash on 64-bit, because Xash3D not support this
 if(CMAKE_SIZEOF_VOID_P EQUAL 8)

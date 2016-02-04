@@ -60,6 +60,7 @@ convar_t	*sv_allow_upload;
 convar_t	*sv_allow_download;
 convar_t	*sv_allow_fragment;
 convar_t	*sv_downloadurl;
+convar_t	*sv_fakegamedir;
 convar_t	*sv_clientclean;
 convar_t	*sv_allow_studio_attachment_angles;
 convar_t	*sv_allow_rotate_pushables;
@@ -86,6 +87,9 @@ convar_t	*teamplay;
 convar_t	*skill;
 convar_t	*coop;
 convar_t	*sv_skipshield; // HACK for shield
+convar_t	*sv_trace_messages;
+convar_t	*sv_master;
+convar_t	*sv_corpse_solid;
 
 // sky variables
 convar_t	*sv_skycolor_r;
@@ -222,7 +226,7 @@ void SV_UpdateMovevars( qboolean initialize )
 
 	// check range
 	if( sv_zmax->value < 256.0f ) Cvar_SetFloat( "sv_zmax", 256.0f );
-	if( sv_zmax->value > 32767.0f ) Cvar_SetFloat( "sv_zmax", 32767.0f );
+	if( sv_zmax->value > 131070.0f ) Cvar_SetFloat( "sv_zmax", 131070.0f );
 
 	svgame.movevars.gravity = sv_gravity->value;
 	svgame.movevars.stopspeed = sv_stopspeed->value;
@@ -346,6 +350,9 @@ void SV_ReadPackets( void )
 			SV_ConnectionlessPacket( net_from, &net_message );
 			continue;
 		}
+
+		if( !svs.initialized )
+			continue;
 
 		// read the qport out of the message so we can fix up
 		// stupid address translating routers
@@ -592,7 +599,11 @@ Host_ServerFrame
 void Host_ServerFrame( void )
 {
 	// if server is not active, do nothing
-	if( !svs.initialized ) return;
+	if( !svs.initialized )
+	{
+		SV_ReadPackets (); // allow rcon
+		return;
+	}
 
 	svgame.globals->frametime = host.frametime;
 
@@ -640,10 +651,10 @@ void Master_Add( void )
 
 	NET_Config( true ); // allow remote
 
-	if( !NET_StringToAdr( MASTERSERVER_ADR, &adr ))
-		MsgDev( D_INFO, "Can't resolve adr: %s\n", MASTERSERVER_ADR );
+	if( !NET_StringToAdr( sv_master->string, &adr ))
+		MsgDev( D_INFO, "Can't resolve adr: %s\n", sv_master->string );
 
-	NET_SendPacket( NS_SERVER, 1, "q", adr );
+	NET_SendPacket( NS_SERVER, 2, "q\xFF", adr );
 }
 
 
@@ -792,6 +803,7 @@ void SV_Init( void )
 	sv_allow_download = Cvar_Get( "sv_allow_download", "0", CVAR_ARCHIVE, "allow clients to download missing resources" );
 	sv_allow_fragment = Cvar_Get( "sv_allow_fragment", "0", CVAR_ARCHIVE, "allow direct download from server" );
 	sv_downloadurl = Cvar_Get( "sv_downloadurl", "", CVAR_ARCHIVE, "custom fastdl server to pass to client" );
+	sv_fakegamedir = Cvar_Get( "sv_fakegamedir", "", 0, "fake gamedir value in server info to show server in list" );
 	sv_clientclean = Cvar_Get( "sv_clientclean", "0", CVAR_ARCHIVE, "client cleaning mode (0-3), useful for bots" );
 	sv_send_logos = Cvar_Get( "sv_send_logos", "1", 0, "send custom player decals to other clients" );
 	sv_send_resources = Cvar_Get( "sv_send_resources", "1", 0, "send generic resources that are specified in 'mapname.res'" );
@@ -800,7 +812,10 @@ void SV_Init( void )
 	mp_consistency = Cvar_Get( "mp_consistency", "1", CVAR_SERVERNOTIFY, "enable consistency check in multiplayer" );
 	clockwindow = Cvar_Get( "clockwindow", "0.5", 0, "timewindow to execute client moves" );
 	sv_novis = Cvar_Get( "sv_novis", "0", 0, "disable server-side visibility checking" );
-	sv_skipshield = Cvar_Get("sv_skipshield", "0", CVAR_ARCHIVE, "skip shield hitbox");
+	sv_skipshield = Cvar_Get( "sv_skipshield", "0", CVAR_ARCHIVE, "skip shield hitbox");
+	sv_trace_messages = Cvar_Get( "sv_trace_messages", "0", CVAR_ARCHIVE|CVAR_LATCH, "enable server usermessages tracing (good for developers)" );
+	sv_master = Cvar_Get(" sv_master", MASTERSERVER_ADR, CVAR_ARCHIVE, "master server address" );
+	sv_corpse_solid = Cvar_Get( "sv_corpse_solid", "0", CVAR_ARCHIVE, "make corpses solid" );
 	Cmd_AddCommand( "download_resources", SV_DownloadResources_f, "try to download missing resources to server");
 
 	SV_ClearSaveDir ();	// delete all temporary *.hl files

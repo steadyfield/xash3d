@@ -948,12 +948,12 @@ void NET_Config( qboolean multiplayer )
 	static qboolean old_config;
 	static qboolean bFirst = true;
 
-	if( old_config == multiplayer )
+	if( old_config == multiplayer && host.type != HOST_DEDICATED )
 		return;
 
 	old_config = multiplayer;
 
-	if( !multiplayer )
+	if( !multiplayer && host.type != HOST_DEDICATED )
 	{	
 		int	i;
 
@@ -1259,8 +1259,8 @@ void HTTP_Run( void )
 
 	if( !curfile->file ) // state == 0
 	{
-		Msg( "HTTP: Starting download %s\n", curfile->path );
 		char name[PATH_MAX];
+		Msg( "HTTP: Starting download %s from %s\n", curfile->path, server->host );
 		Q_snprintf( name, PATH_MAX, "downloaded/%s.incomplete", curfile->path );
 		curfile->file = FS_Open( name, "wb", true );
 		if( !curfile->file )
@@ -1278,14 +1278,15 @@ void HTTP_Run( void )
 
 	if( curfile->state < 2 ) // Socket is not created
 	{
+		dword mode;
 		curfile->socket = pSocket( AF_INET, SOCK_STREAM, IPPROTO_TCP );
 		// Now set non-blocking mode
 		// You may skip this if not supported by system,
 		// but download will lock engine, maybe you will need to add manual returns
 #ifdef _WIN32
-		dword mode = 1;
+		mode = 1;
 		pIoctlSocket( curfile->socket, FIONBIO, &mode );
-#else
+#elif !defined(__FreeBSD__)
 		// SOCK_NONBLOCK is not portable, so use fcntl
 		fcntl( curfile->socket, F_SETFL, fcntl( curfile->socket, F_GETFL, 0 ) | O_NONBLOCK );
 #endif
@@ -1300,14 +1301,14 @@ void HTTP_Run( void )
 		if( res )
 		{
 #ifdef _WIN32
-			if( pWSAGetLastError() == WSAEINPROGRESS )
+			if( pWSAGetLastError() == WSAEINPROGRESS || pWSAGetLastError() == WSAEWOULDBLOCK )
 #else
 			if( errno == EINPROGRESS ) // Should give EWOOLDBLOCK if try recv too soon
 #endif
 				curfile->state = 3;
 			else
 			{
-				Msg( "HTTP: Cannot connect to %s\n","" );
+				Msg( "HTTP: Cannot connect to server: %s\n", NET_ErrorString( ) );
 				HTTP_FreeFile( curfile, true ); // Cannot connect
 				return;
 			}
@@ -1336,16 +1337,16 @@ void HTTP_Run( void )
 			if( res < 0 )
 			{
 #ifdef _WIN32
-				if( pWSAGetLastError() != WSAEWOULDBLOCK )
-#else
+				if( pWSAGetLastError() != WSAEWOULDBLOCK && pWSAGetLastError() != WSAENOTCONN )
+#elif !defined(__FreeBSD__)
 				if( errno != EWOULDBLOCK )
 #endif
 				{
-					Msg( "HTTP: Failed to send request:\n%s\n", header );
+					Msg( "HTTP: Failed to send request: %s\n", NET_ErrorString() );
 					HTTP_FreeFile( curfile, true );
 					return;
 				}
-
+#ifndef __FreeBSD__
 				// increase counter when blocking
 				curfile->blocktime += host.frametime;
 
@@ -1356,6 +1357,7 @@ void HTTP_Run( void )
 					return;
 				}
 				return;
+#endif
 			}
 			else
 			{
@@ -1383,6 +1385,7 @@ void HTTP_Run( void )
 			if( begin ) // Got full header
 			{
 				int cutheadersize = begin - header + 4; // after that begin of data
+				char *length;
 				Msg( "HTTP: Got response!\n" );
 				if( !Q_strstr(header, "200 OK") )
 				{
@@ -1392,7 +1395,7 @@ void HTTP_Run( void )
 					return;
 				}
 				// print size
-				char *length = Q_strstr(header, "Content-Length: ");
+				length = Q_strstr(header, "Content-Length: ");
 				if( length )
 				{
 					int size = Q_atoi( length += 16 );

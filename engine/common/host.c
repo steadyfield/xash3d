@@ -26,6 +26,7 @@ GNU General Public License for more details.
 #include "mod_local.h"
 #include "mathlib.h"
 #include "input.h"
+#include "touch.h"
 #include "engine_features.h"
 #include "render_api.h"	// decallist_t
 #include "sdl/events.h"
@@ -37,6 +38,7 @@ host_parm_t	host;	// host parms
 sysinfo_t		SI;
 
 convar_t	*host_serverstate;
+convar_t	*vrmode;
 convar_t	*host_gameloaded;
 convar_t	*host_clientloaded;
 convar_t	*host_limitlocal;
@@ -44,6 +46,7 @@ convar_t	*host_cheats;
 convar_t	*host_maxfps;
 convar_t	*host_framerate;
 convar_t	*host_sleeptime;
+convar_t	*host_xashds_hacks;
 convar_t	*con_gamemaps;
 convar_t	*download_types;
 convar_t	*build, *ver;
@@ -300,6 +303,7 @@ void Host_Minimize_f( void )
 
 qboolean Host_IsLocalGame( void )
 {
+	if( host.type != HOST_DEDICATED )
 	if( CL_Active() && SV_Active() && CL_GetMaxClients() == 1 )
 		return true;
 	return false;
@@ -764,6 +768,31 @@ void Host_MapDesignError( const char *format, ... )
 }
 /*
 =================
+Host_Userconfigd_f
+
+Exec all configs from userconfig.d directory
+=================
+*/
+void Host_Userconfigd_f( void )
+{
+	search_t		*t;
+	int		i;
+
+	t = FS_Search( "userconfig.d/*.cfg", true, false );
+	if( !t ) return;
+
+	for( i = 0; i < t->numfilenames; i++ )
+	{
+		Cbuf_AddText( va("exec %s\n", t->filenames[i] ) );
+	}
+
+	Mem_Free( t );
+
+}
+
+
+/*
+=================
 Host_InitCommon
 =================
 */
@@ -778,20 +807,12 @@ void Host_InitCommon( int argc, const char** argv, const char *progname, qboolea
 	Sys_ParseCommandLine( argc, argv );
 	
 	host.enabledll = !Sys_CheckParm( "-nodll" );
+
+	host.shutdown_issued = false;
+	host.crashed = false;
 #ifdef DLL_LOADER
 	if( host.enabledll )
 		Setup_LDT_Keeper( ); // Must call before creating any thread
-#endif
-
-#ifdef XASH_SDL
-	if( SDL_Init( SDL_INIT_VIDEO |
-				SDL_INIT_TIMER |
-				SDL_INIT_AUDIO |
-				SDL_INIT_JOYSTICK |
-				SDL_INIT_EVENTS ))
-	{
-		Sys_Error( "SDL_Init: %s", SDL_GetError() );
-	}
 #endif
 
 	if( baseDir = getenv( "XASH3D_BASEDIR" ) )
@@ -813,7 +834,7 @@ void Host_InitCommon( int argc, const char** argv, const char *progname, qboolea
 	if( host.rootdir[Q_strlen( host.rootdir ) - 1] == '/' )
 		host.rootdir[Q_strlen( host.rootdir ) - 1] = 0;
 
-	if(Sys_CheckParm( "-noch" ))
+	if( !Sys_CheckParm( "-noch" ) )
 	{
 #ifdef _WIN32
 		SetErrorMode( SEM_FAILCRITICALERRORS );	// no abort/retry/fail errors
@@ -835,9 +856,17 @@ void Host_InitCommon( int argc, const char** argv, const char *progname, qboolea
 	host.change_game = bChangeGame;
 	host.state = HOST_INIT; // initialization started
 	host.developer = host.old_developer = 0;
+	host.textmode = false;
 
 	host.mempool = Mem_AllocPool( "Zone Engine" );
+	host.vrmode = false;
 
+	if ( Sys_CheckParm("-vr") )
+	{
+		host.vrmode = true;
+
+		Cvar_SetFloat( "vrmode" , 1.0f );
+	}	
 	if( Sys_CheckParm( "-console" )) host.developer = 1;
 	if( Sys_CheckParm( "-dev" ))
 	{
@@ -852,7 +881,7 @@ void Host_InitCommon( int argc, const char** argv, const char *progname, qboolea
 
 	if( !Sys_CheckParm( "-vguiloader" ) || !Sys_GetParmFromCmdLine( "-vguiloader", host.vguiloader ) )
 	{
-		Q_strcpy(host.vguiloader, VGUI_SUPPORT_DLL);
+		Q_strcpy( host.vguiloader, VGUI_SUPPORT_DLL );
 	}
 
 
@@ -865,6 +894,14 @@ void Host_InitCommon( int argc, const char** argv, const char *progname, qboolea
 #endif
 	host.con_showalways = true;
 	host.mouse_visible = false;
+
+#ifdef XASH_SDL
+	SDL_Init( SDL_INIT_TIMER );
+	if( SDL_Init( SDL_INIT_VIDEO |SDL_INIT_EVENTS ))
+	{
+		host.type = HOST_DEDICATED;
+	}
+#endif
 
 	if ( SetCurrentDirectory( host.rootdir ) != 0)
 		MsgDev( D_INFO, "%s is working directory now\n", host.rootdir );
@@ -888,8 +925,8 @@ void Host_InitCommon( int argc, const char** argv, const char *progname, qboolea
 	}
 
 	host.old_developer = host.developer;
-
-	Con_CreateConsole();
+	if( !Sys_CheckParm( "-nowcon" ) )
+		Con_CreateConsole();
 
 	// first text message into console or log 
 	MsgDev( D_NOTE, "Sys_LoadLibrary: Loading Engine Library - ok\n" );
@@ -898,11 +935,13 @@ void Host_InitCommon( int argc, const char** argv, const char *progname, qboolea
 	Cmd_Init();
 	Cvar_Init();
 
+
 	// share developer level across all dlls
 	Q_snprintf( dev_level, sizeof( dev_level ), "%i", host.developer );
 	Cvar_Get( "developer", dev_level, CVAR_INIT, "current developer level" );
 	Cmd_AddCommand( "exec", Host_Exec_f, "execute a script file" );
 	Cmd_AddCommand( "memlist", Host_MemStats_f, "prints memory pool information" );
+	Cmd_AddCommand( "userconfigd", Host_Userconfigd_f, "execute all scripts from userconfig.d" );
 
 	FS_Init();
 	Image_Init();
@@ -943,7 +982,9 @@ Host_Main
 int EXPORT Host_Main( int argc, const char **argv, const char *progname, int bChangeGame, pfnChangeGame func )
 {
 	static double	oldtime, newtime;
-
+#ifdef XASH_SDL
+	SDL_Event event;
+#endif
 	pChangeGame = func;	// may be NULL
 
 	Host_InitCommon( argc, argv, progname, bChangeGame );
@@ -956,7 +997,7 @@ int EXPORT Host_Main( int argc, const char **argv, const char *progname, int bCh
 		Cmd_AddCommand ( "crash", Host_Crash_f, "a way to force a bus error for development reasons");
 		Cmd_AddCommand ( "net_error", Net_Error_f, "send network bad message from random place");
 	}
-
+	vrmode = Cvar_Get( "vrmode", "0", CVAR_ARCHIVE , "Virtual Reality mode" );
 	host_cheats = Cvar_Get( "sv_cheats", "0", CVAR_LATCH, "allow usage of cheat commands and variables" );
 	host_maxfps = Cvar_Get( "fps_max", "72", CVAR_ARCHIVE, "host fps upper limit" );
 	host_sleeptime = Cvar_Get( "sleeptime", "1", CVAR_ARCHIVE, "higher value means lower accuracy" );
@@ -968,8 +1009,9 @@ int EXPORT Host_Main( int argc, const char **argv, const char *progname, int bCh
 	con_gamemaps = Cvar_Get( "con_mapfilter", "1", CVAR_ARCHIVE, "when enabled, show only maps in game folder (no maps from base folder when running mod)" );
 	download_types = Cvar_Get( "download_types", "msec", CVAR_ARCHIVE, "list of types to download: Model, Sounds, Events, Custom" );
 	build = Cvar_Get( "build", va( "%i", Q_buildnum()), CVAR_INIT, "returns a current build number" );
-	ver = Cvar_Get( "ver", va( "%i/%g.%i", PROTOCOL_VERSION, XASH_VERSION, Q_buildnum( ) ), CVAR_INIT, "shows an engine version" );
+	ver = Cvar_Get( "ver", va( "%i/%s.%i", PROTOCOL_VERSION, XASH_VERSION, Q_buildnum( ) ), CVAR_INIT, "shows an engine version" );
 	host_mapdesign_fatal = Cvar_Get( "host_mapdesign_fatal", "1", CVAR_ARCHIVE, "make map design errors fatal" );
+	host_xashds_hacks = Cvar_Get( "xashds_hacks", "0", CVAR_ARCHIVE, "hacks for xashds in singleplayer" );
 
 	// content control
 	Cvar_Get( "violence_hgibs", "1", CVAR_ARCHIVE, "show human gib entities" );
@@ -1004,28 +1046,6 @@ int EXPORT Host_Main( int argc, const char **argv, const char *progname, int bCh
 
 	HTTP_Init();
 
-	if( host.type == HOST_DEDICATED )
-	{
-		Con_InitConsoleCommands ();
-
-		Cmd_AddCommand( "quit", Sys_Quit, "quit the game" );
-		Cmd_AddCommand( "exit", Sys_Quit, "quit the game" );
-
-		// dedicated servers are using settings from server.cfg file
-		Cbuf_AddText( va( "exec %s\n", Cvar_VariableString( "servercfgfile" )));
-		Cbuf_Execute();
-
-		Cbuf_AddText( va( "map %s\n", Cvar_VariableString( "defaultmap" )));
-	}
-	else
-	{
-		Cmd_AddCommand( "minimize", Host_Minimize_f, "minimize main window to taskbar" );
-		Cbuf_AddText( "exec config.cfg\n" );
-	}
-
-	host.errorframe = 0;
-	Cbuf_Execute();
-
 	// post initializations
 	switch( host.type )
 	{
@@ -1042,17 +1062,50 @@ int EXPORT Host_Main( int argc, const char **argv, const char *progname, int bCh
 		break;
 	}
 
+	if( host.type == HOST_DEDICATED )
+	{
+		char *defaultmap;
+		Con_InitConsoleCommands ();
+
+		Cmd_AddCommand( "quit", Sys_Quit, "quit the game" );
+		Cmd_AddCommand( "exit", Sys_Quit, "quit the game" );
+
+		// dedicated servers are using settings from server.cfg file
+		Cbuf_AddText( va( "exec %s\n", Cvar_VariableString( "servercfgfile" )));
+		Cbuf_Execute();
+
+		defaultmap = Cvar_VariableString( "defaultmap" );
+		if( !defaultmap[0] )
+			Msg( "Please add \"defaultmap\" cvar with default map name to your server.cfg!\n" );
+		else
+			Cbuf_AddText( va( "map %s\n", defaultmap ));
+		Cvar_FullSet( "xashds_hacks", "0", CVAR_READ_ONLY );
+		NET_Config( true );
+	}
+	else
+	{
+		Cmd_AddCommand( "minimize", Host_Minimize_f, "minimize main window to taskbar" );
+		Cbuf_AddText( "exec config.cfg\n" );
+	}
+
+	host.errorframe = 0;
+	Cbuf_Execute();
+
 	host.change_game = false;	// done
 	Cmd_RemoveCommand( "setr" );	// remove potential backdoor for changing renderer settings
 	Cmd_RemoveCommand( "setgl" );
 
 	// we need to execute it again here
 	Cmd_ExecuteString( "exec config.cfg\n", src_command );
+
+	// exec all files from userconfig.d 
+	Host_Userconfigd_f();
+
 	oldtime = Sys_DoubleTime();
+	IN_TouchInitConfig();
 	SCR_CheckStartupVids();	// must be last
 #ifdef XASH_SDL
 	SDL_StopTextInput(); // disable text input event. Enable this in chat/console?
-	SDL_Event event;
 #endif
 	// main window message loop
 	while( !host.crashed && !host.shutdown_issued )
@@ -1081,11 +1134,29 @@ void EXPORT Host_Shutdown( void )
 	if( host.shutdown_issued ) return;
 	host.shutdown_issued = true;
 
-	if( host.state != HOST_ERR_FATAL ) host.state = HOST_SHUTDOWN; // prepare host to normal shutdown
-	if( !host.change_game ) Q_strncpy( host.finalmsg, "Server shutdown", sizeof( host.finalmsg ));
 
-	if( host.type == HOST_NORMAL )
-		Host_WriteConfig();
+	switch( host.state )
+	{
+	case HOST_INIT:
+	case HOST_SHUTDOWN:
+	case HOST_CRASHED:
+		host.state = HOST_SHUTDOWN;
+	case HOST_ERR_FATAL:
+		if( host.type == HOST_NORMAL )
+			MsgDev( D_WARN, "Not shutting down normally, skipping config save!\n" );
+		break;
+	default:
+		if( host.type == HOST_NORMAL )
+		{
+			Host_WriteConfig();
+			IN_TouchWriteConfig();
+		}
+		host.state = HOST_SHUTDOWN; // prepare host to normal shutdown
+	}
+
+	if( !host.change_game )
+		Q_strncpy( host.finalmsg, "Server shutdown", sizeof( host.finalmsg ));
+
 
 	SV_Shutdown( false );
 	CL_Shutdown();
@@ -1093,6 +1164,7 @@ void EXPORT Host_Shutdown( void )
 	Mod_Shutdown();
 	NET_Shutdown();
 	HTTP_Shutdown();
+	Cmd_Shutdown();
 	Host_FreeCommon();
 	Con_DestroyConsole();
 

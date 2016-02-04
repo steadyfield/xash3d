@@ -105,6 +105,12 @@ void SV_DirectConnect( netadr_t from )
 	int		challenge;
 	edict_t		*ent;
 
+	if( !svs.initialized )
+	{
+		Netchan_OutOfBandPrint( NS_SERVER, from, "print\nServer not running any map!\n" );
+		return;
+	}
+
 	version = Q_atoi( Cmd_Argv( 1 ));
 
 	if( version != PROTOCOL_VERSION )
@@ -233,7 +239,7 @@ gotnewcl:
 
 	if( ( sv_maxclients->integer > 1 ) && ent->pvPrivateData )
 	{
-		// Force this client data
+		// Force clean this client data
 		if( sv_clientclean->integer & 1 )
 		{
 			if( ent->pvPrivateData != NULL )
@@ -246,7 +252,7 @@ gotnewcl:
 				Mem_Free( ent->pvPrivateData );
 				ent->pvPrivateData = NULL;
 			}
-			// HACK: invalidate serial number
+			// invalidate serial number
 			ent->serialnumber++;
 		}
 		// "3" enables both clean and disconnect
@@ -677,13 +683,17 @@ void SV_Info( netadr_t from )
 	char	string[MAX_INFO_STRING];
 	int	i, count = 0;
 	int	version;
+	char *gamedir = GI->gamefolder;
 
 	// ignore in single player
-	if( sv_maxclients->integer == 1 )
+	if( sv_maxclients->integer == 1 || !svs.initialized )
 		return;
 
 	version = Q_atoi( Cmd_Argv( 1 ));
 	string[0] = '\0';
+
+	if( *sv_fakegamedir->string )
+		gamedir = sv_fakegamedir->string;
 
 	if( version != PROTOCOL_VERSION )
 	{
@@ -702,7 +712,7 @@ void SV_Info( netadr_t from )
 		Info_SetValueForKey( string, "coop", va( "%i", svgame.globals->coop ));
 		Info_SetValueForKey( string, "numcl", va( "%i", count ));
 		Info_SetValueForKey( string, "maxcl", va( "%i", sv_maxclients->integer ));
-		Info_SetValueForKey( string, "gamedir", GI->gamefolder );
+		Info_SetValueForKey( string, "gamedir", gamedir );
 	}
 
 	Netchan_OutOfBandPrint( NS_SERVER, from, "info\n%s", string );
@@ -722,7 +732,7 @@ void SV_BuildNetAnswer( netadr_t from )
 	int	i, count = 0;
 
 	// ignore in single player
-	if( sv_maxclients->integer == 1 )
+	if( sv_maxclients->integer == 1 || !svs.initialized )
 		return;
 
 	version = Q_atoi( Cmd_Argv( 1 ));
@@ -1246,8 +1256,13 @@ void SV_New_f( sv_client_t *cl )
 			// transfer fastdl servers list
 			if( sv_downloadurl->string && *sv_downloadurl->string )
 			{
-				BF_WriteByte( &cl->netchan.message, svc_stufftext );
-				BF_WriteString( &cl->netchan.message, va( "http_addcustomserver %s\n", sv_downloadurl->string ));
+				char *data = sv_downloadurl->string;
+				char token[256];
+				while( data = COM_ParseFile( data, token ) )
+				{
+					BF_WriteByte( &cl->netchan.message, svc_stufftext );
+					BF_WriteString( &cl->netchan.message, va( "http_addcustomserver %s\n", token ));
+				}
 			}
 			// request resource list
 			BF_WriteByte( &cl->netchan.message, svc_stufftext );
@@ -1290,6 +1305,11 @@ void SV_SendResourceList_f( sv_client_t *cl )
 	int		rescount = 0;
 	resourcelist_t	reslist;	// g-cont. what about stack???
 	size_t		msg_size;
+	char *resfile;
+	char *mapresfile;
+	char mapresfilename[256];
+	char token[256];
+	char *pfile;
 
 	Q_memset( &reslist, 0, sizeof( resourcelist_t ));
 
@@ -1336,6 +1356,34 @@ void SV_SendResourceList_f( sv_client_t *cl )
 		Q_strcpy( reslist.resnames[rescount], sv.files_precache[index] );
 		rescount++;
 	}
+
+	// load common reslist file form gamedir root
+	resfile = pfile = FS_LoadFile("reslist.txt", 0, true );
+	while( pfile = COM_ParseFile( pfile, token ) )
+	{
+		if( !FS_FileExists( token, true ) )
+			continue;
+		reslist.restype[rescount] = t_generic;
+		Q_strcpy( reslist.resnames[rescount], token );
+		rescount++;
+	}
+	if( resfile )
+		Mem_Free( resfile );
+	// maps/<name>.res
+	Q_strncpy( mapresfilename, sv.worldmodel->name, sizeof( mapresfilename ));
+	FS_StripExtension( mapresfilename );
+	FS_DefaultExtension( mapresfilename, ".res" );
+	mapresfile = pfile = FS_LoadFile( mapresfilename, 0, true );
+	while( pfile = COM_ParseFile( pfile, token ) )
+	{
+		if( !FS_FileExists( token, true ) )
+			continue;
+		reslist.restype[rescount] = t_generic;
+		Q_strcpy( reslist.resnames[rescount], token );
+		rescount++;
+	}
+	if( mapresfile )
+		Mem_Free( mapresfile );
 
 	msg_size = BF_GetRealBytesWritten( &cl->netchan.message ); // start
 
@@ -1785,7 +1833,6 @@ void SV_Pause_f( sv_client_t *cl )
 	SV_TogglePause( message );
 }
 
-
 /*
 =================
 SV_UserinfoChanged
@@ -1821,6 +1868,14 @@ void SV_UserinfoChanged( sv_client_t *cl, const char *userinfo )
 		val = Info_ValueForKey( cl->userinfo, "name" );
 	}
 
+	if( !Q_strlen( temp1 ) )
+	{
+		Info_SetValueForKey( cl->userinfo, "name",	"unnamed" );
+		val = Info_ValueForKey( cl->userinfo, "name" );
+		Q_strncpy( temp2, "unnamed", sizeof( temp2 ));
+		Q_strncpy( temp1, "unnamed", sizeof( temp1 ));
+	}
+
 	// check to see if another user by the same name exists
 	while( 1 )
 	{
@@ -1839,12 +1894,12 @@ void SV_UserinfoChanged( sv_client_t *cl, const char *userinfo )
 			Q_snprintf( temp2, sizeof( temp2 ), "%s (%u)", temp1, dupc++ );
 			Info_SetValueForKey( cl->userinfo, "name", temp2 );
 			val = Info_ValueForKey( cl->userinfo, "name" );
-			Q_strcpy( cl->name, temp2 );
+			Q_strncpy( cl->name, temp2, sizeof( cl->name ) );
 		}
 		else
 		{
 			if( dupc == 1 ) // unchanged
-				Q_strcpy( cl->name, temp1 );
+				Q_strncpy( cl->name, temp1, sizeof( cl->name ) );
 			break;
 		}
 	}
@@ -1890,10 +1945,17 @@ void SV_UserinfoChanged( sv_client_t *cl, const char *userinfo )
 	}
 	else cl->modelindex = 0;
 
+	// Force reset player model to "player"
+	if( cl->modelindex == 0 )
+	{
+		Info_SetValueForKey( cl->userinfo, "model", "player" );
+		Mod_RegisterModel( "models/player.mdl", SV_ModelIndex( "models/player.mdl" ));
+		SV_SetModel( ent, "models/player.mdl" );
+	}
+
 	// call prog code to allow overrides
 	svgame.dllFuncs.pfnClientUserInfoChanged( cl->edict, cl->userinfo );
 	ent->v.netname = MAKE_STRING( cl->name );
-
 	if( cl->state >= cs_connected ) cl->sendinfo = true; // needs for update client info 
 }
 
@@ -2193,12 +2255,16 @@ void SV_EntFire_f( sv_client_t *cl )
 			ent->v.target = ALLOC_STRING( Cmd_Argv ( 3 ) );
 		else if( !Q_stricmp( Cmd_Argv( 2 ), "set" ) )
 		{
+			char keyname[MAX_STRING];
+			char value[MAX_STRING];
 			KeyValueData	pkvd;
 			if( Cmd_Argc() != 5 )
 				return;
 			pkvd.szClassName = (char*)STRING( ent->v.classname );
-			pkvd.szKeyName = Cmd_Argv( 3 );
-			pkvd.szValue = Cmd_Argv( 4 );
+			Q_strncpy( keyname, Cmd_Argv( 3 ), MAX_STRING );
+			Q_strncpy( value, Cmd_Argv( 4 ), MAX_STRING );
+			pkvd.szKeyName = keyname;
+			pkvd.szValue = value;
 			svgame.dllFuncs.pfnKeyValue( ent, &pkvd );
 			if( pkvd.fHandled )
 				SV_ClientPrintf( cl, PRINT_LOW, "value set successfully!\n" );
@@ -2312,7 +2378,6 @@ void SV_EntFire_f( sv_client_t *cl )
 				"    rendermode\n"
 				"    rendercolor (vector)\n"
 				"    renderfx\n"
-				"    renderamt\n"
 				"    renderamt\n"
 				"    hullmin (vector)\n"
 				"    hullmax (vector)\n"
@@ -2533,12 +2598,15 @@ void SV_ConnectionlessPacket( netadr_t from, sizebuf_t *msg )
 	uint	challenge;
 	int	index, count = 0;
 	char	query[512], ostype = 'u';
+	char *gamedir = GI->gamefolder;
 
 	BF_Clear( msg );
 	BF_ReadLong( msg );// skip the -1 marker
 
 	args = BF_ReadStringLine( msg );
 	Cmd_TokenizeString( args );
+	if( *sv_fakegamedir->string )
+		gamedir = sv_fakegamedir->string;
 
 	c = Cmd_Argv( 0 );
 	MsgDev( D_NOTE, "SV_ConnectionlessPacket: %s : %s\n", NET_AdrToString( from ), c );
@@ -2551,7 +2619,7 @@ void SV_ConnectionlessPacket( netadr_t from, sizebuf_t *msg )
 	else if( !Q_strcmp( c, "connect" )) SV_DirectConnect( from );
 	else if( !Q_strcmp( c, "rcon" )) SV_RemoteCommand( from, msg );
 	else if( !Q_strcmp( c, "netinfo" )) SV_BuildNetAnswer( from );
-	else if( msg->pData[0] == 0xFF && msg->pData[1] == 0xFF && msg->pData[2] == 0xFF && msg->pData[3] == 0xFF && msg->pData[4] == 0x73 && msg->pData[5] == 0x0A )
+	else if( msg->pData[4] == 0x73 && msg->pData[5] == 0x0A )
 	{
 		Q_memcpy(&challenge, &msg->pData[6], sizeof(int));
 
@@ -2581,14 +2649,14 @@ void SV_ConnectionlessPacket( netadr_t from, sizebuf_t *msg )
 		"\\os\\%c"					// server OS?
 		"\\secure\\0"				// server anti-cheat? VAC?
 		"\\lan\\0"					// is LAN server?
-		"\\version\\%f"				// server version
+		"\\version\\%s"				// server version
 		"\\region\\255"				// server region
 		"\\product\\%s\n",			// product? Where is the difference with gamedir?
 		PROTOCOL_VERSION,
 		challenge,
 		count,
 		sv_maxclients->integer,
-		GI->gamefolder,
+		gamedir,
 		sv.name,
 		ostype,
 		XASH_VERSION,
@@ -2596,6 +2664,71 @@ void SV_ConnectionlessPacket( netadr_t from, sizebuf_t *msg )
 		);
 
 		NET_SendPacket( NS_SERVER, Q_strlen( query ), query, from );
+	}
+	else if( !Q_strcmp( c, "T" "Source" ) ) // "Source Engine Query"
+	{
+		 // A2S_INFO
+		char answer[2048] = "";
+		byte *s = answer;
+#if 0 // Source format
+		*s++ = 'I';
+		*s++ = PROTOCOL_VERSION;
+		s += Q_strcpy( s, hostname->string ) + 1;
+		s += Q_strcpy( s, sv.name ) + 1;
+		s += Q_strcpy( s, gamedir ) + 1;
+		s += Q_strcpy( s, gamedir ) + 1;
+		// steam id
+		*s++ = 0;
+		*s++ = 0;
+		for( index = 0; index < sv_maxclients->integer; index++ )
+		{
+			if( svs.clients[index].state >= cs_connected )
+				count++;
+		}
+		*s++ = count;
+		*s++ = sv_maxclients->integer;
+		*s++ = 0; // bots
+		*s++ = host.type == HOST_DEDICATED?'d':'l';
+		#ifdef _WIN32
+		ostype = 'w';
+		#else
+		ostype = 'l';
+		#endif
+		*s++ = ostype;
+		*s++ = 0; // visibility
+		*s++ = 0; // not secured
+#else // GS format
+		*s++ = 'm';
+		s += Q_sprintf( s, "127.0.0.1:27015" ) + 1;
+
+		s += Q_strcpy( s, hostname->string ) + 1;
+		s += Q_strcpy( s, sv.name ) + 1;
+		s += Q_strcpy( s, gamedir ) + 1;
+		s += Q_strcpy( s, gamedir ) + 1;
+		for( index = 0; index < sv_maxclients->integer; index++ )
+		{
+			if( svs.clients[index].state >= cs_connected )
+				count++;
+		}
+		*s++ = count;
+		*s++ = sv_maxclients->integer;
+		*s++ = PROTOCOL_VERSION;
+		*s++ = host.type == HOST_DEDICATED?'D':'L';
+		*s++ = Q_toupper( ostype );
+		*s++ = 0; // not a mod
+		*s++ = 0;  // not VAC
+		*s++ = 0; //bots
+#endif
+		NET_SendPacket( NS_SERVER, (char*)s - answer, answer, from );
+
+	}
+	else if( !Q_strcmp( c, "i" ) )
+	{
+		 // A2A_PING
+		byte answer[8];
+
+		NET_SendPacket( NS_SERVER, 5, "\xFF\xFF\xFF\xFFj", from );
+
 	}
 	else if( svgame.dllFuncs.pfnConnectionlessPacket( &from, args, buf, &len ))
 	{

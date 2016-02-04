@@ -19,6 +19,7 @@ GNU General Public License for more details.
 #include "cl_tent.h"
 #include "gl_local.h"
 #include "input.h"
+#include "touch.h"
 #include "kbutton.h"
 #include "vgui_draw.h"
 
@@ -47,6 +48,10 @@ convar_t	*cl_draw_beams;
 convar_t	*cl_cmdrate;
 convar_t	*cl_interp;
 convar_t	*cl_allow_fragment;
+convar_t	*cl_lw;
+convar_t	*cl_trace_events;
+convar_t	*cl_charset;
+convar_t	*cl_sprite_nearest;
 convar_t	*hud_scale;
 
 //
@@ -151,11 +156,7 @@ qboolean CL_ChangeGame( const char *gamefolder, qboolean bReset )
 		Q_strncpy( mapname, clgame.mapname, MAX_STRING );
 		Q_strncpy( maptitle, clgame.maptitle, MAX_STRING );
 
-#ifdef PANDORA
-                if( !CL_LoadProgs( va( "%s/" CLIENTDLL, "." )))
-#else
 		if( !CL_LoadProgs( va( "%s/%s", GI->dll_path, GI->client_lib)))
-#endif
 			Host_Error( "Can't initialize client library\n" );
 
 		// restore parms
@@ -298,14 +299,14 @@ void CL_CreateCmd( void )
 	VectorCopy( cl.refdef.cl_viewangles, cl.data.viewangles );
 
 	cl.data.iWeaponBits = cl.frame.local.client.weapons;
-	cl.data.fov = cl.frame.local.client.fov;
+	cl.data.fov = cl.scr_fov;
 
 	clgame.dllFuncs.pfnUpdateClientData( &cl.data, cl.time );
 
 	// grab changes
 	VectorCopy( cl.data.viewangles, cl.refdef.cl_viewangles );
 	cl.frame.local.client.weapons = cl.data.iWeaponBits;
-	cl.frame.local.client.fov = cl.data.fov;
+	cl.scr_fov = cl.data.fov;
 
 	// allways dump the first ten messages,
 	// because it may contain leftover inputs
@@ -687,7 +688,7 @@ CL_Connect_f
 //#include <sys/mman.h>
 void CL_Connect_f( void )
 {
-	char server[ sizeof( cls.servername ) ];
+	string server;
 
 	if( Cmd_Argc() != 2 )
 	{
@@ -695,7 +696,7 @@ void CL_Connect_f( void )
 		return;	
 	}
 	
-	Q_strncpy( server, Cmd_Argv( 1 ), sizeof( cls.servername ));
+	Q_strncpy( server, Cmd_Argv( 1 ), MAX_STRING );
 
 	if( Host_ServerState())
 	{	
@@ -795,6 +796,7 @@ void CL_ClearState( void )
 	Cvar_FullSet( "cl_background", "0", CVAR_READ_ONLY );
 	cl.refdef.movevars = &clgame.movevars;
 	cl.maxclients = 1; // allow to drawing player in menu
+	cl.scr_fov = 90.0f;
 
 	Cvar_SetFloat( "scr_download", 0.0f );
 	Cvar_SetFloat( "scr_loading", 0.0f );
@@ -922,17 +924,17 @@ CL_InternetServers_f
 void CL_InternetServers_f( void )
 {
 	netadr_t	adr;
-	char	fullquery[512] = "\x31\xFF" "0.0.0.0:0\0" "\\gamedir\\";
+	char	fullquery[512] = "1\xFF" "0.0.0.0:0\0" "\\gamedir\\";
 
 	MsgDev( D_INFO, "Scanning for servers on the internet area...\n" );
 	NET_Config( true ); // allow remote
 
-	if( !NET_StringToAdr( MASTERSERVER_ADR, &adr ) )
-		MsgDev( D_INFO, "Can't resolve adr: %s\n", MASTERSERVER_ADR );
+	if( !NET_StringToAdr( sv_master->string, &adr ) )
+		MsgDev( D_INFO, "Can't resolve adr: %s\n", sv_master->string );
 
-	Q_strcpy( &fullquery[21], GI->gamedir );
+	Q_strcpy( &fullquery[22], GI->gamedir );
 
-	NET_SendPacket( NS_CLIENT, Q_strlen( GI->gamedir ) + 22, fullquery, adr );
+	NET_SendPacket( NS_CLIENT, 23 + Q_strlen(GI->gamedir), fullquery, adr );
 }
 
 /*
@@ -1048,6 +1050,7 @@ void CL_ParseStatusMessage( netadr_t from, sizebuf_t *msg )
 	char	*s;
 
 	s = BF_ReadString( msg );
+	MsgDev( D_NOTE, "Got info string: %s\n", s );
 	UI_AddServerToList( from, s );
 }
 
@@ -1623,11 +1626,14 @@ void CL_InitLocal( void )
 	//Cvar_Get( "ex_maxerrordistance", "0", 0, "" );
 	cl_allow_fragment = Cvar_Get( "cl_allow_fragment", "0", CVAR_ARCHIVE, "allow downloading files directly from game server" ); 
 	cl_timeout = Cvar_Get( "cl_timeout", "60", 0, "connect timeout (in seconds)" );
+	cl_charset = Cvar_Get( "cl_charset", "utf-8", CVAR_ARCHIVE, "1-byte charset to use (iconv style)" );
 
 	rcon_client_password = Cvar_Get( "rcon_password", "", 0, "remote control client password" );
 	rcon_address = Cvar_Get( "rcon_address", "", 0, "remote control address" );
 	
 	r_oldparticles = Cvar_Get("r_oldparticles", "0", CVAR_ARCHIVE, "make some particle textures a simple square, like with software rendering");
+
+	cl_trace_events = Cvar_Get("cl_trace_events", "0", CVAR_ARCHIVE|CVAR_LATCH, "enable client event tracing (good for developers)");
 
 	// userinfo
 	Cvar_Get( "password", "", CVAR_USERINFO, "player password" );
@@ -1645,6 +1651,7 @@ void CL_InitLocal( void )
 	cl_draw_particles = Cvar_Get( "cl_draw_particles", "1", CVAR_ARCHIVE, "disable particle effects" );
 	cl_draw_beams = Cvar_Get( "cl_draw_beams", "1", CVAR_ARCHIVE, "disable view beams" );
 	cl_lightstyle_lerping = Cvar_Get( "cl_lightstyle_lerping", "0", CVAR_ARCHIVE, "enable animated light lerping (perfomance option)" );
+	cl_sprite_nearest = Cvar_Get( "cl_sprite_nearest", "0", CVAR_ARCHIVE, "disable texture filtering on sprites" );
 
 	hud_scale = Cvar_Get( "hud_scale", "0", CVAR_ARCHIVE|CVAR_LATCH, "scale hud at current resolution" );
 	Cvar_Get( "skin", "", CVAR_USERINFO, "player skin" ); // XDM 3.3 want this cvar
@@ -1823,21 +1830,30 @@ void CL_Init( void )
 	// unreliable buffer. unsed for unreliable commands and voice stream
 	BF_Init( &cls.datagram, "cls.datagram", cls.datagram_buf, sizeof( cls.datagram_buf ));
 
+	IN_TouchInit();
+#if defined (__ANDROID__)
+	char clientlib[256];
+	Q_snprintf( clientlib, sizeof(clientlib), "%s/" CLIENTDLL, getenv("XASH3D_GAMELIBDIR"));
+	loaded = CL_LoadProgs( clientlib );
+
+	if( !loaded )
+	{
+		Q_snprintf( clientlib, sizeof(clientlib), "%s/" CLIENTDLL, getenv("XASH3D_ENGLIBDIR"));
+		loaded = CL_LoadProgs( clientlib );
+	}
+#else
 	loaded = CL_LoadProgs( va( "%s/%s" , GI->dll_path, SI.clientlib ));
 	if( !loaded )
-#if defined (__ANDROID__)
-		{
-			char clientlib[256];
-			Q_strncpy( clientlib, getenv("XASH3D_ENGLIBDIR"), 256 );
-			Q_strncat( clientlib, "/" CLIENTDLL, 256 );
-			loaded = CL_LoadProgs( clientlib );
-		}
-#else
+	{
+
 		loaded = CL_LoadProgs( CLIENTDLL );
+
+	}
 #endif
 	if( loaded )
 	{
 		cls.initialized = true;
+		cls.keybind_changed = false;
 		cl.maxclients = 1; // allow to drawing player in menu
 		cls.olddemonum = -1;
 		cls.demonum = -1;
@@ -1852,15 +1868,18 @@ CL_Shutdown
 */
 void CL_Shutdown( void )
 {
-	// already freed
+	if( cls.initialized ) 
+	{
+		MsgDev( D_INFO, "CL_Shutdown()\n" );
 
-	MsgDev( D_INFO, "CL_Shutdown()\n" );
-
-	Host_WriteOpenGLConfig ();
-	Host_WriteVideoConfig ();
-
+		Host_WriteOpenGLConfig ();
+		Host_WriteVideoConfig ();
+	}
+	IN_TouchShutdown();
 	CL_CloseDemoHeader();
 	IN_Shutdown ();
+	Mobile_Destroy();
+
 	SCR_Shutdown ();
 	if( cls.initialized ) 
 	{

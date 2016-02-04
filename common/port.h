@@ -30,7 +30,9 @@ GNU General Public License for more details.
 		#include <sys/syslimits.h>
 		#define OS_LIB_EXT "dylib"
     #else
-		#include <linux/limits.h>
+		#ifdef __linux__
+			#include <linux/limits.h>
+		#endif
 		#define OS_LIB_EXT "so"
     #endif
 
@@ -99,6 +101,9 @@ GNU General Public License for more details.
 	int x, y;
     } POINT;
 #else
+	#ifdef __MINGW32__
+	#define _inline static inline
+	#endif
 	#define strcasecmp _stricmp
 	#define strncasecmp _strnicmp
 	#define open _open

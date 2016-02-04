@@ -30,14 +30,9 @@ set (CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3")
 set (CMAKE_CXX_FLAGS_MINSIZEREL "${CMAKE_CXX_FLAGS_MINSIZEREL} -Os")
 set (CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} -g -O3")
 
-if(PANDORA)
-        add_definitions(-DPANDORA)
-endif()
-
 if(XASH_SDL)
-	include(FindPkgConfig)
-	pkg_search_module(SDL2 REQUIRED sdl2)
-	include_directories(${SDL2_INCLUDE_DIRS})
+	find_package(SDL2 REQUIRED sdl2)
+	include_directories(${SDL2_INCLUDE_DIR})
 
 	add_definitions(-DXASH_SDL)
 endif()
@@ -49,7 +44,7 @@ file (GLOB XASH_LAUNCHER_SOURCES *.c)
 add_executable (${XASH_LAUNCHER_EXECUTABLE} ${XASH_LAUNCHER_SOURCES})
 
 if(XASH_SDL)
-	target_link_libraries(${XASH_LAUNCHER_EXECUTABLE} ${SDL2_LIBRARIES})
+	target_link_libraries(${XASH_LAUNCHER_EXECUTABLE} ${SDL2_LIBRARY})
 endif()
 
 target_link_libraries(${XASH_LAUNCHER_EXECUTABLE}

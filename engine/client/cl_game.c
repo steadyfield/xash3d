@@ -687,7 +687,7 @@ and hold them into permament memory pool
 */
 static void CL_InitTitles( const char *filename )
 {
-	size_t	fileSize;
+	fs_offset_t	fileSize;
 	byte	*pMemFile;
 	int	i;
 
@@ -707,7 +707,7 @@ static void CL_InitTitles( const char *filename )
 	pMemFile = FS_LoadFile( filename, &fileSize, false );
 	if( !pMemFile ) return;
 
-	CL_TextMessageParse( pMemFile, fileSize );
+	CL_TextMessageParse( pMemFile, (int)fileSize );
 	Mem_Free( pMemFile );
 }
 
@@ -889,10 +889,11 @@ void CL_DrawCrosshair( void )
 	// get crosshair dimension
 	width = clgame.ds.rcCrosshair.right - clgame.ds.rcCrosshair.left;
 	height = clgame.ds.rcCrosshair.bottom - clgame.ds.rcCrosshair.top;
-
-	x = clgame.scrInfo.iWidth / 2; 
 	y = clgame.scrInfo.iHeight / 2;
-
+	if(host.vrmode)
+		{x = clgame.scrInfo.iWidth / 4; }
+	else
+		{x = clgame.scrInfo.iWidth / 2; }
 	// g-cont - cl.refdef.crosshairangle is the autoaim angle.
 	// if we're not using autoaim, just draw in the middle of the screen
 	if( !VectorIsNull( cl.refdef.crosshairangle ))
@@ -918,6 +919,14 @@ void CL_DrawCrosshair( void )
 	SPR_EnableScissor( x - 0.5f * width, y - 0.5f * height, width, height );
 	SPR_DrawGeneric( 0, x - 0.5f * width, y - 0.5f * height, -1, -1, &clgame.ds.rcCrosshair );
 	SPR_DisableScissor();
+	if(host.vrmode)
+	{
+
+		SPR_EnableScissor( (clgame.scrInfo.iWidth-x) - 0.5f * width, y - 0.5f * height, width, height );
+		SPR_DrawGeneric( 0, (clgame.scrInfo.iWidth-x )- 0.5f * width, y - 0.5f * height, -1, -1, &clgame.ds.rcCrosshair );
+		SPR_DisableScissor();
+		
+	}
 }
 
 /*
@@ -1090,6 +1099,8 @@ void CL_ClearWorld( void )
 void CL_InitEdicts( void )
 {
 	ASSERT( clgame.entities == NULL );
+	if( !clgame.mempool )
+		return; // Host_Error without client
 
 	CL_UPDATE_BACKUP = ( cl.maxclients == 1 ) ? SINGLEPLAYER_BACKUP : MULTIPLAYER_BACKUP;
 	cls.num_client_entities = CL_UPDATE_BACKUP * 64;
@@ -1141,7 +1152,7 @@ void CL_ClearEdicts( void )
 static qboolean CL_LoadHudSprite( const char *szSpriteName, model_t *m_pSprite, qboolean mapSprite, uint texFlags )
 {
 	byte	*buf;
-	size_t	size;
+	fs_offset_t	size;
 	qboolean	loaded;
 
 	ASSERT( m_pSprite != NULL );
@@ -1152,7 +1163,7 @@ static qboolean CL_LoadHudSprite( const char *szSpriteName, model_t *m_pSprite, 
 	Q_strncpy( m_pSprite->name, szSpriteName, sizeof( m_pSprite->name ));
 	m_pSprite->flags = 256; // it's hud sprite, make difference names to prevent free shared textures
 
-	if( mapSprite ) Mod_LoadMapSprite( m_pSprite, buf, size, &loaded );
+	if( mapSprite ) Mod_LoadMapSprite( m_pSprite, buf, (size_t)size, &loaded );
 	else Mod_LoadSpriteModel( m_pSprite, buf, &loaded, texFlags );		
 
 	Mem_Free( buf );
@@ -1203,7 +1214,7 @@ HSPRITE pfnSPR_LoadExt( const char *szPicName, uint texFlags )
 			break; // this is a valid spot
 	}
 
-	if( i == MAX_IMAGES ) 
+	if( i >= MAX_IMAGES ) 
 	{
 		MsgDev( D_ERROR, "SPR_Load: can't load %s, MAX_HSPRITES limit exceeded\n", szPicName );
 		return 0;
@@ -1212,7 +1223,10 @@ HSPRITE pfnSPR_LoadExt( const char *szPicName, uint texFlags )
 	// load new model
 	if( CL_LoadHudSprite( name, &clgame.sprites[i], false, texFlags ))
 	{
-		clgame.sprites[i].needload = clgame.load_sequence;
+		if( i < MAX_IMAGES - 1 )
+		{
+			clgame.sprites[i].needload = clgame.load_sequence;
+		}
 		return i;
 	}
 	return 0;
@@ -1226,7 +1240,11 @@ pfnSPR_Load
 */
 HSPRITE pfnSPR_Load( const char *szPicName )
 {
-	return pfnSPR_LoadExt( szPicName, 0 );
+	int texFlags = TF_NOPICMIP;
+	if( cl_sprite_nearest->value )
+		texFlags |= TF_NEAREST;
+
+	return pfnSPR_LoadExt( szPicName, texFlags );
 }
 
 /*
@@ -1444,7 +1462,7 @@ pfnGetScreenInfo
 get actual screen info
 =============
 */
-static int pfnGetScreenInfo( SCREENINFO *pscrinfo )
+int pfnGetScreenInfo( SCREENINFO *pscrinfo )
 {
 	// setup screen info
 	float scale_factor = hud_scale->value;
@@ -1665,12 +1683,13 @@ pfnDrawCharacter
 returns drawed chachter width (in real screen pixels)
 =============
 */
-static int pfnDrawCharacter( int x, int y, int number, int r, int g, int b )
+int pfnDrawCharacter( int x, int y, int number, int r, int g, int b )
 {
 	if( !cls.creditsFont.valid )
 		return 0;
 
 	number &= 255;
+	number = Con_UtfProcessChar( number );
 
 	if( number < 32 ) return 0;
 	if( y < -clgame.scrInfo.iCharHeight )
@@ -1772,7 +1791,11 @@ GetWindowCenterX
 */
 static int pfnGetWindowCenterX( void )
 {
-	return host.window_center_x;
+	int x = 0;
+#ifdef XASH_SDL
+	SDL_GetWindowPosition( host.hWnd, &x, NULL );
+#endif
+	return host.window_center_x + x;
 }
 
 /*
@@ -1783,7 +1806,11 @@ GetWindowCenterY
 */
 static int pfnGetWindowCenterY( void )
 {
-	return host.window_center_y;
+	int y = 0;
+#ifdef XASH_SDL
+	SDL_GetWindowPosition( host.hWnd, NULL, &y );
+#endif
+	return host.window_center_y + y;
 }
 
 /*
@@ -2255,15 +2282,7 @@ physent_t *pfnGetPhysent( int idx )
 	return NULL;
 }
 
-static struct predicted_player {
-	int flags;
-	int movetype;
-	int solid;
-	int usehull;
-	qboolean active;
-	vec3_t origin; // predicted origin
-	vec3_t angles;
-} predicted_players[MAX_CLIENTS];
+struct predicted_player predicted_players[MAX_CLIENTS];
 
 /*
 =============
@@ -2273,64 +2292,54 @@ pfnSetUpPlayerPrediction
 */
 void pfnSetUpPlayerPrediction( int dopred, int bIncludeLocalClient )
 {
-	int j = 0;
-	int v3 = cl.parsecountmod;	// In original GS code this is "ei", not cl.
+	int j;
 	struct predicted_player *pPlayer = predicted_players;
-	entity_state_t *entState = cl.frames[v3].playerstate; //v5
+	entity_state_t *entState = cl.frames[cl.parsecountmod].playerstate;
 
-	qboolean v7; // v7
-	cl_entity_t *clEntity; // v9
-	int v12; // edx@11
+	cl_entity_t *clEntity;
 
-	for( j = 0, pPlayer = predicted_players, entState = cl.frames[v3].playerstate;
+	for( j = 0, pPlayer = predicted_players, entState = cl.frames[cl.parsecountmod].playerstate;
 		 j < MAX_CLIENTS;
 		 j++, pPlayer++, entState++)
 	{
-		v7 = entState->messagenum == cl.parsecount;
 		pPlayer->active = false;
 
-		if( entState->messagenum != cl.parsecount )
-			continue; // not present this frame
+		// Does not work in xash3d
+		//if( entState->messagenum != cl.parsecount )
+			//continue; // not present this frame
 
 		if( !entState->modelindex )
 			continue;
 
+		clEntity = CL_EDICT_NUM( j + 1 );
 		//special for EF_NODRAW and local client?
-		if( entState->effects & EF_NODRAW && bIncludeLocalClient == false )
+		if( ( entState->effects & EF_NODRAW ) && ( bIncludeLocalClient == false ) )
 		{
 			// don't include local player?
-			if( cl.playernum == j)
+			if( cl.playernum == j )
 				continue;
 			else
 			{
-				pPlayer->active = 1;
+				pPlayer->active = true;
 				pPlayer->movetype = entState->movetype;
 				pPlayer->solid = entState->solid;
 				pPlayer->usehull = entState->usehull;
 
-				clEntity = CL_EDICT_NUM( j + 1 );
-				//CL_ComputePlayerOrigin(v9);
-				VectorCopy(clEntity->origin, pPlayer->origin);
-				VectorCopy(clEntity->angles, pPlayer->angles);
+				VectorCopy( clEntity->origin, pPlayer->origin );
+				VectorCopy( clEntity->angles, pPlayer->angles );
 			}
 		}
 		else
 		{
-			if( cl.playernum == j)
+			if( cl.playernum == j )
 				continue;
-			pPlayer->active = 1;
+			pPlayer->active = true;
 			pPlayer->movetype = entState->movetype;
 			pPlayer->solid = entState->solid;
 			pPlayer->usehull = entState->usehull;
 
-			v12 = 17080 * cl.parsecountmod + 340 * j;
-			pPlayer->origin[0] = cl.frames[0].playerstate[0].origin[0] + v12;
-			pPlayer->origin[1] = cl.frames[0].playerstate[0].origin[1] + v12;
-			pPlayer->origin[2] = cl.frames[0].playerstate[0].origin[2] + v12;
-
-			pPlayer->angles[0] = cl.frames[0].playerstate[0].angles[0] + v12;
-			pPlayer->angles[1] = cl.frames[0].playerstate[0].angles[1] + v12;
-			pPlayer->angles[2] = cl.frames[0].playerstate[0].angles[2] + v12;
+			VectorCopy(cl.frames[cl.parsecountmod].playerstate[j].origin, pPlayer->origin);
+			VectorCopy(cl.frames[cl.parsecountmod].playerstate[j].angles, pPlayer->angles);
 		}
 	}
 }
@@ -2479,7 +2488,7 @@ const char *pfnGetGameDirectory( void )
 {
 	static char	szGetGameDir[MAX_SYSPATH];
 
-	Q_sprintf( szGetGameDir, "%s/%s", host.rootdir, GI->gamedir );
+	Q_sprintf( szGetGameDir, "%s", GI->gamedir );
 	return szGetGameDir;
 }
 
@@ -2543,6 +2552,11 @@ model_t *pfnLoadMapSprite( const char *filename )
 {
 	char	name[64];
 	int	i;
+	int texFlags = TF_NOPICMIP;
+
+
+	if( cl_sprite_nearest->value )
+		texFlags |= TF_NEAREST;
 
 	if( !filename || !*filename )
 	{
@@ -2578,7 +2592,7 @@ model_t *pfnLoadMapSprite( const char *filename )
 	}
 
 	// load new map sprite
-	if( CL_LoadHudSprite( name, &clgame.sprites[i], true, 0 ))
+	if( CL_LoadHudSprite( name, &clgame.sprites[i], true, texFlags ))
 	{
 		clgame.sprites[i].needload = clgame.load_sequence;
 		return &clgame.sprites[i];
@@ -3208,7 +3222,7 @@ int TriWorldToScreen( float *world, float *screen )
 
 	retval = R_WorldToScreen( world, screen );
 
-	screen[0] =  0.5f * screen[0] * (float)cl.refdef.viewport[2];
+	screen[0] =  0.5f * (float)cl.refdef.viewport[2];
 	screen[1] = -0.5f * screen[1] * (float)cl.refdef.viewport[3];
 	screen[0] += 0.5f * (float)cl.refdef.viewport[2];
 	screen[1] += 0.5f * (float)cl.refdef.viewport[3];
@@ -4082,7 +4096,8 @@ qboolean CL_LoadProgs( const char *name )
 		return false;
 	}
 
-	Cvar_Get( "cl_lw", "0", CVAR_ARCHIVE|CVAR_USERINFO, "enable client weapon prediction" );
+	Cvar_Get( "cl_nopred", "1", CVAR_ARCHIVE|CVAR_USERINFO, "disable client movement predicting" );
+	cl_lw = Cvar_Get( "cl_lw", "0", CVAR_ARCHIVE|CVAR_USERINFO, "enable client weapon predicting" );
 	Cvar_Get( "cl_lc", "0", CVAR_ARCHIVE|CVAR_USERINFO, "enable lag compensation" );
 	Cvar_FullSet( "host_clientloaded", "1", CVAR_INIT );
 
@@ -4101,6 +4116,7 @@ qboolean CL_LoadProgs( const char *name )
 	{
 		MsgDev( D_WARN, "CL_LoadProgs: couldn't get render API\n" );
 	}
+	Mobile_Init(); // Xash3D extension: mobile interface
 
 	// initialize game
 	clgame.dllFuncs.pfnInit();
